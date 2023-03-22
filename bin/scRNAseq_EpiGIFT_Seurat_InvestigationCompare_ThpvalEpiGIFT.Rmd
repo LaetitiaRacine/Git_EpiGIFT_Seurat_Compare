@@ -1,0 +1,108 @@
+---
+title: "EpiGift_FindMarkers_Compare - EpiGift pvalue threshold"
+author: "Laëtitia Racine"
+date: "2023-03-15"
+output: html_document
+---
+
+<style>
+body {text-align: justify}
+</style>
+
+```{r, Setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+```
+
+```{r, Dependencies}
+
+library(dplyr)
+library(Seurat)
+library(stringr)
+library(ggplot2)
+
+```
+
+```{r, Working directory and external script}
+
+# Load working directories
+directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
+directory_data = paste0(directory, "data/")
+start_time = Sys.time()
+
+# Load external script with functions and constants
+source(file = paste0(directory, "bin/", "Epi_FM_functions_constants.R"))
+
+```
+
+We have the list from FindMarkers with threshold 0.15 and Wilcoxon test.  
+We have several lists of EpiGift depending the threshold used on pvalue : 25, 30, 35 or 40.  
+We want to see the common list between them.
+
+```{r, Input loading}
+
+dir = paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/")
+genes_FM = readRDS(paste0(dir,"list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
+genes_FM = genes_FM[["wilcox"]]
+genes_FM = genes_FM$gene
+
+genes_Epi_t40 = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")$GeneName
+genes_Epi_t25 = read.csv2(paste0(directory_data, "20230314_list_442genes_pSNP5gt25.csv"), sep =",")$GeneName
+genes_Epi_t30 = read.csv2(paste0(directory_data, "20230314_list_325genes_pSNP5gt30.csv"), sep =",")$GeneName
+genes_Epi_t35 = read.csv2(paste0(directory_data, "20230314_list_235genes_pSNP5gt35.csv"), sep =",")$GeneName
+
+```
+
+```{r, fig.width = 16, fig.height = 8}
+
+tab = data.frame(
+  EpiGift_pvalue_threshold = c("40", "35", "30", "25"),
+  Number_genes_EpiGift = c(length(genes_Epi_t40), 
+                           length(genes_Epi_t35),
+                           length(genes_Epi_t30), 
+                           length(genes_Epi_t25)),
+  Number_overlapping_genes_FM = c(length(intersect(genes_FM, genes_Epi_t40)),
+                                 length(intersect(genes_FM, genes_Epi_t35)),
+                                 length(intersect(genes_FM, genes_Epi_t30)),
+                                 length(intersect(genes_FM, genes_Epi_t25))) 
+) %>%
+  dplyr::mutate(Percentage_overlap_EpiGift = (Number_overlapping_genes_FM / Number_genes_EpiGift)*100) %>%
+  dplyr::mutate(Percentage_overlap_FM = (Number_overlapping_genes_FM/length(genes_FM))*100)
+
+tab
+
+
+plot1 = ggplot(tab, aes(x=EpiGift_pvalue_threshold, Number_overlapping_genes_FM)) +
+  geom_point()
+
+plot2 = ggplot(tab, aes(x=EpiGift_pvalue_threshold, Percentage_overlap_FM)) +
+  geom_point()
+
+plot3 = ggplot(tab, aes(x=EpiGift_pvalue_threshold, Percentage_overlap_EpiGift)) +
+  geom_point()
+
+plot1 | plot2 | plot3
+
+```
+
+
+```{r, Rsession}
+
+end_time = Sys.time()
+cat("Total execution time : ", as.numeric (end_time - start_time, units = "mins"), "minutes")
+
+# Show package version
+sessionInfo()
+
+```
+
+```{r, results='hide'}
+
+# Clean working space and memory 
+rm(list = ls())
+gc()
+
+```

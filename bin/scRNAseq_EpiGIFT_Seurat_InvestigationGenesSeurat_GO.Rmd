@@ -1,0 +1,420 @@
+---
+title: "EpiGIFT_Seurat : Investigation on List of Genes Seurat GO"
+author: "Laëtitia Racine"
+date: "2023-02-15"
+subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: "show"
+    toc: true
+    toc_float: false
+    theme: journal
+---
+   
+```{r, Setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+```
+
+```{r, Dependencies}
+
+library(dplyr)
+library(Seurat)
+library(stringr)
+library(tidyverse)
+library(ggplot2)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(STRINGdb)
+library(kableExtra)
+
+```
+
+```{r, Working directory and external script}
+
+# Load working directories
+directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
+start_time = Sys.time()
+
+# Load external script with functions and constants
+source(file = paste0(directory, "bin/Epi_FM_functions_constants.R"))
+
+# Extract info from STRING database
+
+string_db <- STRINGdb$new(version="11.5", species=9606, score_threshold=200, input_directory="")
+
+```
+
+```{r, Input loading}
+ 
+# Loading initial data
+
+dir = paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/")
+genes_FM_list = readRDS(paste0(dir, "/", "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
+genes_FM_list = genes_FM_list[["wilcox"]]
+genes_fixed = readRDS(paste0(dir, "/", "list_365_genes_merge.rds"))
+genes_fixed_tab = read.csv2(paste0(dir, "/", "tab_residualvariance_365variablegenes.csv"))
+genes_merge = read.csv2(paste0(dir, "/", "list_394_genes_variablefeatures_th1.3.csv" ))
+genes_merge_tab = read.csv2(paste0(dir, "/", "tab_residualvariance_394variablegenes_th1.3.csv"))
+
+tab_corr = read.csv2(paste0(directory, "data/scRNAseq_correspondence_tab_EnsemblID_geneName_genomePos.csv")) %>% 
+    dplyr::select(gene_symbol_dupl, ensembl_gene_id) %>%
+    dplyr::rename(gene = "gene_symbol_dupl") %>%
+    dplyr::distinct()  # to remove duplicated genes
+
+gene_universe = data.frame(tab_corr$gene)
+
+list_seurat_obj = readRDS(paste0(directory, "data/", "list_seurat_obj_epi.rds"))
+list_seurat_obj = list_seurat_obj[c("CTRL", "DON")]
+
+```
+
+```{r, function GO}
+
+GO_clusterProfiler_fun = function(tab_corr, list_gene, gene_universe, title_plot) {
+  # gene_universe : list of background genes 
+  # tab_corr : tab with the correspondence between gene symbol and Ensembl_ID
+  
+   # Convert Gene Name (gene) into Ensembl ID (ensembl_gene_id)
+   ############################################################
+    if(colnames(list_gene) != "gene") { colnames(list_gene) = "gene"}
+    list_gene = left_join(x = list_gene,
+                          y = tab_corr,
+                          by = "gene")
+
+    # Extract gene classification
+    #############################
+    ggo_BP = groupGO(gene = list_gene$ensembl_gene_id,
+                  OrgDb = org.Hs.eg.db,
+                  ont = "BP",
+                  level = 3,
+                  keyType = "ENSEMBL",
+                  readable = TRUE)
+    ggo_CC = groupGO(gene = list_gene$ensembl_gene_id,
+                     OrgDb = org.Hs.eg.db,
+                     ont = "CC",
+                     level = 3,
+                     keyType = "ENSEMBL",
+                     readable = TRUE)
+    ggo_MF = groupGO(gene = list_gene$ensembl_gene_id,
+                     OrgDb = org.Hs.eg.db,
+                     ont = "MF",
+                     level = 3,
+                     keyType = "ENSEMBL",
+                     readable = TRUE)
+    ggo_BP = as.data.frame(ggo_BP@result) %>% dplyr::mutate(ontology = "BP")
+    ggo_CC = as.data.frame(ggo_CC@result) %>% dplyr::mutate(ontology = "CC")
+    ggo_MF = as.data.frame(ggo_MF@result) %>% dplyr::mutate(ontology = "MF")
+    df_ggo = rbind(ggo_BP, ggo_CC, ggo_MF)
+    print("ggo calculated")
+    
+    # GO over-representation analysis
+    #################################
+    ego = enrichGO(gene = list_gene$ensembl_gene_id,
+                   OrgDb = org.Hs.eg.db,
+                   universe = gene_universe,
+                   ont = "ALL", # toutes les catégories
+                   pAdjustMethod = "BH",
+                   pvalueCutoff = 0.05,
+                   qvalueCutoff = 0.2,
+                   readable = TRUE,
+                   keyType = "ENSEMBL")
+   
+    # Reduce term redundancy
+    if (nrow(ego@result) != 0) { ego = simplify(ego,
+                                                cutoff = 0.7,
+                                                by = "p.adjust",
+                                                select_fun = min,
+                                                measure = "Wang", 
+                                                semData = NULL) }
+    
+    df_ego = as.data.frame(ego@result)
+    print("ego calculated")
+
+    # Plot enrichment
+    #################
+    if (nrow(df_ego) != 0) {
+      
+      plot_dot = dotplot(ego, showCategory = 25) +
+        ggtitle(title_plot) +
+        facet_grid(ONTOLOGY ~ ., scales="free")
+      
+      plot_bar = barplot(ego, showCategory = 25) +
+        ggtitle(title_plot) +
+        facet_grid(ONTOLOGY ~ ., scales="free")
+     
+      output = list(ggo = df_ggo,
+                    ego_result = df_ego,
+                    dotplot_25 = plot_dot,
+                    barplot_25 =  plot_bar)
+      
+    } else {
+      
+      print("No enriched category found.")
+      
+      output = list(ggo = df_ggo,
+                    ego_result = df_ego)
+      
+    }
+  
+  return(output)
+
+}
+
+```
+
+
+
+
+# List of genes from FindMarker function
+
+Initial data :     
+- CTRL and DON conditions      
+- SCT object with individual normalization and variable features with threshold = 1.3    
+- Merge the two SCT objects and keep union of each list as variable features      
+- PCA with dimension 0 - 40 and UMAP resolution 0.6 algorithm 3    
+- list of genes extracted with FindMarkers function (logfc.threshold = 0.15, p_val_adj <= 0.05)    
+  
+```{r}
+
+cat("We have a list of", nrow(genes_FM_list), "genes.")
+
+```
+
+## Gene Ontology
+
+```{r, fig.height = 12, fig.width = 14}
+
+GO_results_FM = GO_clusterProfiler_fun(
+  tab_corr = tab_corr,
+  list_gene = data.frame(genes_FM_list$gene),
+  gene_universe = gene_universe,
+  title_plot = "FindMarkers-GeneList-CTRL&DON"
+)
+
+GO_results_FM$barplot_25 | GO_results_FM$dotplot_25
+
+```
+
+## Transcript distribution of top 10
+
+Extract the 10 more variable genes of the list (with p-value adjust low).    
+Visualize distribution of the transcripts in the population.    
+
+```{r, fig.height=14, fig.width=14}
+
+genes_to_keep = (genes_FM_list %>% dplyr::arrange(p_val_adj))[1:10,]$gene
+  
+# extract the matrix count normalized
+matrix_CTRL = data.frame(list_seurat_obj$CTRL@assays$RNA@data) %>%
+  tibble::rownames_to_column("gene") %>%
+  dplyr::filter(gene %in% genes_to_keep) 
+matrix_CTRL = matrix_CTRL %>%
+  tidyr::pivot_longer(cols = 2:ncol(matrix_CTRL),
+                      names_to = "cell",
+                      values_to = "value") %>%
+  dplyr::mutate(condition = "CTRL")
+
+matrix_DON = data.frame(list_seurat_obj$DON@assays$RNA@data) %>%
+  tibble::rownames_to_column("gene") %>%
+  dplyr::filter(gene %in% genes_to_keep)
+matrix_DON = matrix_DON %>%
+  tidyr::pivot_longer(cols = 2:ncol(matrix_DON),
+                      names_to = "cell",
+                      values_to = "value") %>%
+  dplyr::mutate(condition = "DON")
+
+matrix = rbind(matrix_CTRL, matrix_DON)
+
+ggplot(matrix) +
+  geom_histogram(aes(x=value, fill = condition), binwidth = 0.1) +
+  facet_grid(gene~condition)
+
+```
+
+## String Analysis
+
+```{r}
+
+data_STRING <- string_db$map(genes_FM_list, "gene", removeUnmappedRows = TRUE)
+hits <- data_STRING$STRING_id
+string_db$plot_network(hits)
+out_hits<-string_db$get_interactions(hits)
+out_hits %>%
+  kable() %>%
+  kable_styling() %>%
+  scroll_box(height = "250px", width = "100%")
+
+```
+
+
+
+# List of genes from variable features with fixed number of features (365)
+
+```{r}
+
+cat("We have a list of", length(genes_fixed), "genes.")
+
+```
+
+# Gene Ontology
+
+```{r, fig.height = 14, fig.width = 14}
+
+GO_results_fixed = GO_clusterProfiler_fun(
+  tab_corr = tab_corr,
+  list_gene = data.frame(genes_fixed),
+  gene_universe = gene_universe,
+  title_plot = "365VariableFeatures-GeneList-CTRL&DON"
+)
+
+GO_results_fixed$barplot_25 | GO_results_fixed$dotplot_25
+
+```
+
+## Transcript distribution of top 10
+
+```{r, fig.height=14, fig.width=14}
+
+genes_to_keep = (genes_fixed_tab %>% dplyr::arrange(desc(residual_variance)))[1:10,]$gene
+  
+# extract the matrix count normalized
+matrix_CTRL = data.frame(list_seurat_obj$CTRL@assays$RNA@data) %>%
+  tibble::rownames_to_column("gene") %>%
+  dplyr::filter(gene %in% genes_to_keep) 
+matrix_CTRL = matrix_CTRL %>%
+  tidyr::pivot_longer(cols = 2:ncol(matrix_CTRL),
+                      names_to = "cell",
+                      values_to = "value") %>%
+  dplyr::mutate(condition = "CTRL")
+
+matrix_DON = data.frame(list_seurat_obj$DON@assays$RNA@data) %>%
+  tibble::rownames_to_column("gene") %>%
+  dplyr::filter(gene %in% genes_to_keep)
+matrix_DON = matrix_DON %>%
+  tidyr::pivot_longer(cols = 2:ncol(matrix_DON),
+                      names_to = "cell",
+                      values_to = "value") %>%
+  dplyr::mutate(condition = "DON")
+
+matrix = rbind(matrix_CTRL, matrix_DON)
+
+ggplot(matrix) +
+  geom_histogram(aes(x=value, fill = condition), binwidth = 0.1) +
+  facet_grid(gene~condition)
+
+```
+
+## String analysis
+
+```{r}
+
+tab = data.frame(gene = genes_fixed)
+data_STRING <- string_db$map(tab, "gene", removeUnmappedRows = TRUE)
+hits <- data_STRING$STRING_id
+string_db$plot_network(hits)
+out_hits<-string_db$get_interactions(hits)
+out_hits %>%
+  kable() %>%
+  kable_styling() %>%
+  scroll_box(height = "250px", width = "100%")
+
+```
+
+
+
+
+# List of genes from variable features with threshold = 1.3
+
+```{r}
+
+cat("We have a list of", nrow(genes_merge), "genes.")
+
+```
+
+## Gene Ontology
+
+```{r, fig.height = 14, fig.width = 14}
+
+GO_results_merge_th = GO_clusterProfiler_fun(
+  tab_corr = tab_corr,
+  list_gene = data.frame(genes_merge),
+  gene_universe = gene_universe,
+  title_plot = "VariableFeatures-Threshold1.3-GeneList-CTRL&DON"
+)
+
+GO_results_merge_th$barplot_25 | GO_results_merge_th$dotplot_25
+
+```
+
+## Transcript distribution of top 10
+
+```{r, fig.height=14, fig.width=14}
+
+genes_to_keep = (genes_merge_tab %>% dplyr::arrange(desc(residual_variance)))[1:10,]$gene
+  
+# extract the matrix count normalized
+matrix_CTRL = data.frame(list_seurat_obj$CTRL@assays$RNA@data) %>%
+  tibble::rownames_to_column("gene") %>%
+  dplyr::filter(gene %in% genes_to_keep) 
+matrix_CTRL = matrix_CTRL %>%
+  tidyr::pivot_longer(cols = 2:ncol(matrix_CTRL),
+                      names_to = "cell",
+                      values_to = "value") %>%
+  dplyr::mutate(condition = "CTRL")
+
+matrix_DON = data.frame(list_seurat_obj$DON@assays$RNA@data) %>%
+  tibble::rownames_to_column("gene") %>%
+  dplyr::filter(gene %in% genes_to_keep)
+matrix_DON = matrix_DON %>%
+  tidyr::pivot_longer(cols = 2:ncol(matrix_DON),
+                      names_to = "cell",
+                      values_to = "value") %>%
+  dplyr::mutate(condition = "DON")
+
+matrix = rbind(matrix_CTRL, matrix_DON)
+
+ggplot(matrix) +
+  geom_histogram(aes(x=value, fill = condition), binwidth = 0.1) +
+  facet_grid(gene~condition)
+
+```
+
+## String analysis
+
+```{r}
+
+tab = genes_merge
+colnames(tab) = "gene"
+data_STRING <- string_db$map(tab, "gene", removeUnmappedRows = TRUE)
+hits <- data_STRING$STRING_id
+string_db$plot_network(hits)
+out_hits <-string_db$get_interactions(hits)
+out_hits %>%
+  kable() %>%
+  kable_styling() %>%
+  scroll_box(height = "250px", width = "100%")
+
+```
+
+
+```{r, Rsession}
+
+end_time = Sys.time()
+cat("Total execution time : ", as.numeric (end_time - start_time, units = "mins"), "minutes")
+
+# Show package version
+sessionInfo()
+
+```
+
+```{r, results='hide'}
+
+# Clean working space and memory 
+rm(list = ls())
+gc()
+
+```

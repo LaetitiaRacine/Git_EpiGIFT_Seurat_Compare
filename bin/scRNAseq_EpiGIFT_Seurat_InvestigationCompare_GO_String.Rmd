@@ -1,0 +1,473 @@
+---
+title: "scRNAseq_CITEseq_R_EpiGift_GO_String_Compare"
+author: "Laëtitia Racine & Giota Kyratzi"
+date: "2023-03-09"
+subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: "hide"
+    toc: true
+    toc_float: false
+    theme: journal
+---
+
+<style>
+body {text-align: justify}
+</style>
+
+```{r, Setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+```
+
+```{r, Dependencies}
+
+library(dplyr)
+library(Seurat)
+library(stringr)
+library(tidyverse)
+library(ggplot2)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(STRINGdb)
+library(kableExtra)
+library(reshape2) # melt() function
+
+```
+
+```{r, Working directory and external script}
+
+# Load working directories
+directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
+directory_data = paste0(directory, "data/")
+start_time = Sys.time()
+
+# Load external script with functions and constants
+source(file = paste0(directory, "bin/", "Epi_FM_functions_constants.R"))
+
+# Load gene background for GO function
+tab_corr = read.csv2(paste0(directory, "data/scRNAseq_correspondence_tab_EnsemblID_geneName_genomePos.csv")) %>% 
+    dplyr::select(gene_symbol_dupl, ensembl_gene_id) %>%
+    dplyr::rename(gene = "gene_symbol_dupl") %>%
+    dplyr::distinct()  # to remove duplicated genes
+
+gene_universe = data.frame(tab_corr$gene)
+
+```
+
+
+<br><br><br>
+
+
+# Input data overview
+
+We have to list of genes :    
+- one frome EpiGIFT analysis with pvalue at 40     
+- one from FindMarkers Seurat analysis    
+Those genes are supposed to be significantly different in their expression between CTRL and DON conditions.     
+
+```{r, Load Input data}
+
+dir = paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/")
+genes_FM_list = readRDS(paste0(dir, "/", "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
+genes_FM_list = genes_FM_list[["wilcox"]]
+
+genes_EG_list = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")
+  
+```
+
+```{r}
+
+common_list = intersect(genes_FM_list$gene, genes_EG_list$GeneName)
+only_FM = setdiff(genes_FM_list$gene, genes_EG_list$GeneName)
+only_EG = setdiff(genes_EG_list$GeneName, genes_FM_list$gene)
+
+cat("FindMarkers - Seurat :",  nrow(genes_FM_list), "genes \n",
+    "EpiGIFT :", nrow(genes_EG_list), "genes \n",
+    "Common genes :", length(common_list), "\n",
+    "Only FindMarkers :", length(only_FM), "\n",
+    "Only EpiGift :", length(only_EG), "\n")
+
+```
+
+# Gene Ontology
+
+```{r, function GO}
+
+GO_clusterProfiler_fun = function(tab_corr, list_gene, gene_universe, title_plot) {
+  # gene_universe : list of background genes 
+  # tab_corr : tab with the correspondence between gene symbol and Ensembl_ID
+  
+   # Convert Gene Name (gene) into Ensembl ID (ensembl_gene_id)
+   ############################################################
+    if(colnames(list_gene) != "gene") { colnames(list_gene) = "gene"}
+    list_gene = left_join(x = list_gene,
+                          y = tab_corr,
+                          by = "gene")
+
+    # Extract gene classification
+    #############################
+    ggo_BP = groupGO(gene = list_gene$ensembl_gene_id,
+                  OrgDb = org.Hs.eg.db,
+                  ont = "BP",
+                  level = 3,
+                  keyType = "ENSEMBL",
+                  readable = TRUE)
+    ggo_CC = groupGO(gene = list_gene$ensembl_gene_id,
+                     OrgDb = org.Hs.eg.db,
+                     ont = "CC",
+                     level = 3,
+                     keyType = "ENSEMBL",
+                     readable = TRUE)
+    ggo_MF = groupGO(gene = list_gene$ensembl_gene_id,
+                     OrgDb = org.Hs.eg.db,
+                     ont = "MF",
+                     level = 3,
+                     keyType = "ENSEMBL",
+                     readable = TRUE)
+    ggo_BP = as.data.frame(ggo_BP@result) %>% dplyr::mutate(ontology = "BP")
+    ggo_CC = as.data.frame(ggo_CC@result) %>% dplyr::mutate(ontology = "CC")
+    ggo_MF = as.data.frame(ggo_MF@result) %>% dplyr::mutate(ontology = "MF")
+    df_ggo = rbind(ggo_BP, ggo_CC, ggo_MF)
+    print("ggo calculated")
+    
+    # GO over-representation analysis
+    #################################
+    ego = enrichGO(gene = list_gene$ensembl_gene_id,
+                   OrgDb = org.Hs.eg.db,
+                   universe = gene_universe,
+                   ont = "ALL", # toutes les catégories
+                   pAdjustMethod = "BH",
+                   pvalueCutoff = 0.05,
+                   qvalueCutoff = 0.2,
+                   readable = TRUE,
+                   keyType = "ENSEMBL")
+   
+    # Reduce term redundancy
+    if (nrow(ego@result) != 0) { ego = simplify(ego,
+                                                cutoff = 0.7,
+                                                by = "p.adjust",
+                                                select_fun = min,
+                                                measure = "Wang", 
+                                                semData = NULL) }
+    
+    df_ego = as.data.frame(ego@result)
+    print("ego calculated")
+
+    # Plot enrichment
+    #################
+    if (nrow(df_ego) != 0) {
+      
+      plot_dot = dotplot(ego, showCategory = 25) +
+        ggtitle(title_plot) +
+        facet_grid(ONTOLOGY ~ ., scales="free") +
+        coord_cartesian(xlim = c(0,0.5))
+      
+      plot_bar = barplot(ego, showCategory = 25) +
+        ggtitle(title_plot) +
+        facet_grid(ONTOLOGY ~ ., scales="free") +
+        coord_cartesian(xlim = c(0,50))
+     
+      output = list(ggo = df_ggo,
+                    ego_result = df_ego,
+                    dotplot_25 = plot_dot,
+                    barplot_25 =  plot_bar)
+      
+    } else {
+      
+      print("No enriched category found.")
+      
+      output = list(ggo = df_ggo,
+                    ego_result = df_ego)
+      
+    }
+  
+  return(output)
+
+}
+
+```
+
+Ontology : BP = Biological Process, MF = Molecular Function, CC = Cellular Component   
+GeneRatio : genes of interest in the gene set / total genes of interest  
+
+```{r}
+
+GO_genes_FM_list = GO_clusterProfiler_fun(
+  tab_corr = tab_corr,
+  list_gene = data.frame(genes_FM_list$gene),
+  gene_universe = gene_universe,
+  title_plot = "FindMarkers-219genes-CTRL&DON"
+)
+
+tab_GO_genes_FM_list = GO_genes_FM_list$ego_result 
+
+tab_GO_genes_FM_list %>%
+  kable() %>%
+  kable_styling() %>%
+  scroll_box(height = "250px", width = "100%")
+  
+```
+
+```{r}
+
+GO_genes_EG_list = GO_clusterProfiler_fun(
+  tab_corr = tab_corr,
+  list_gene = data.frame(genes_EG_list$GeneName),
+  gene_universe = gene_universe,
+  title_plot = "EpiGIFT-174genes-CTRL&DON"
+)
+
+tab_GO_genes_EG_list = GO_genes_EG_list$ego_result 
+
+tab_GO_genes_EG_list %>%
+  kable() %>%
+  kable_styling() %>%
+  scroll_box(height = "250px", width = "100%")
+
+```
+
+```{r, results ="hold", fig.width = 16, fig.height = 16}
+
+GO_genes_FM_list$dotplot_25 | GO_genes_EG_list$dotplot_25
+GO_genes_FM_list$barplot_25 | GO_genes_EG_list$barplot_25
+
+```
+
+```{r, Manual plots, results="hold", fig.width=20, fig.height=14}
+
+tab = GO_genes_FM_list$ego_result[1:25,] %>%
+  tidyr::separate(col = GeneRatio, into = c("number" , "total"), sep = "/", remove = TRUE) %>%
+  dplyr::mutate(total = as.integer(total), number = as.integer(number), GeneRatio = number/total) %>%
+  dplyr::select(-total, -number)
+
+FM_dotplot = ggplot(tab, aes(x=GeneRatio, y=reorder(Description, GeneRatio))) +
+  geom_point(aes(col=p.adjust), size = 3) +
+  scale_colour_viridis_c(option = "plasma", limits = c(0, 0.03), begin = 0, end = 1, values = c(0, 0.02, 0.05, 0.1, 0.5, 0.7, 1))
+
+tab2 = GO_genes_EG_list$ego_result[1:25,] %>%
+  tidyr::separate(col = GeneRatio, into = c("number" , "total"), sep = "/", remove = TRUE) %>%
+  dplyr::mutate(total = as.integer(total), number = as.integer(number), GeneRatio = number/total) %>%
+  dplyr::select(-total, -number)
+
+EG_dotplot = ggplot(tab2, aes(x=GeneRatio, y=reorder(Description, GeneRatio))) +
+  geom_point(aes(col=p.adjust), size = 3) +
+  scale_colour_viridis_c(option = "plasma", limits = c(0, 0.03), begin = 0, end = 1, values = c(0, 0.02, 0.05, 0.1, 0.5, 0.7, 1))
+
+FM_dotplot|EG_dotplot
+
+```
+
+```{r}
+
+FM25 = tab_GO_genes_FM_list[1:25,] %>% dplyr::mutate(method = "FindMarkers")
+EG25 = tab_GO_genes_EG_list[1:25,] %>% dplyr::mutate(method = "EpiGIFT")
+tab_comp = rbind(FM25, EG25) %>% dplyr::select(-ONTOLOGY, -p.adjust)
+
+common_terms = intersect(FM25$Description, EG25$Description)
+only_FM_terms = setdiff(FM25$Description, EG25$Description)
+only_EG_terms = setdiff(EG25$Description, FM25$Description)
+
+print("Common terms between both list :")
+common_terms
+print("Only terms from FM :")
+only_FM_terms
+print("Only terms from EG :")
+only_EG_terms
+
+```
+
+```{r}
+
+tab_comp_common = tab_comp %>% 
+  dplyr::filter(Description %in% common_terms) %>%
+  dplyr::select(-ID, -qvalue, -geneID, -BgRatio) %>%
+  tidyr::separate(col = GeneRatio, into = c("number" , "total"), sep = "/", remove = TRUE) %>%
+  dplyr::mutate(total = as.integer(total), GeneRatio = Count/total) %>%
+  dplyr::select(-total, -number)
+
+ggplot(tab_comp_common, aes(x=GeneRatio, y=Description)) +
+  geom_point(aes(shape=method, col=pvalue), size = 3) +
+  scale_color_gradient(low="red", high="blue")
+
+```
+
+# String Analysis
+
+```{r, function String}
+
+string_fun = function(threshold, gene_list, name_col, min_size_clust) {
+  
+  print(paste0("Threshold =", threshold))
+  # Extract info from STRING database
+  # $ to select operation --> new because it's a new session
+  # version = "11.5" --> the latest version
+  # species = 9606 --> for human species
+  # score_threshold e [0,1000] --> the majority of edges are false positives that are noisy data that the network attributes as an edge --> it is the   confidence level of an edge between two genes
+  # score_threshold = 400 -->  moderate score to see if there is any true edges or not
+  # score_threshold = 700 --> edges with high evidence that exist
+  string_db <- STRINGdb$new(version="11.5", species=9606, score_threshold=threshold, input_directory="")
+  
+  # STRINGdb$help("map") --> to see the structure of parameters of the command
+  # removeUnmappedRows = TRUE --> if find any edges cannot map, the string database will remove them
+  genes_mapped <- string_db$map(gene_list, name_col, removeUnmappedRows = TRUE)
+  hits <- genes_mapped$STRING_id
+  #plot_network_all = string_db$plot_network(hits)
+  
+  # to check the interaction between genes --> how many interactions (edges) and their confidence (score_threshold)
+  genes_interactions <- string_db$get_interactions(genes_mapped$STRING_id)
+  
+  # get network clusters
+  # STRINGdb$help("get_clusters") --> to see the structure of parameters of the command
+  clusterList <- string_db$get_clusters(hits, algorithm = "fastgreedy")
+  
+  # identify clusters with genes connected to at least one element - do not use isolated genes that form a cluster
+  min_len <- sapply(clusterList, function(x) length(x)>min_size_clust) 
+  print(paste("We identify", sum(min_len), "clusters out of", length(min_len), "that have at least", min_size_clust, "connection(s)."))
+  clusterList <- clusterList[min_len]
+  for (i in 1:length(clusterList)) {
+    print(paste("Cluster",i, ":", length(clusterList[[i]])))
+  }
+  
+  results = list(string_db = string_db,
+                 genes_mapped = genes_mapped,
+                 genes_interactions = genes_interactions,
+                 hits = hits,
+                 clusterList = clusterList)
+}
+
+```
+
+```{r, fig.show="hide"}
+
+# Confidence level of edges between genes at minimum 200
+string_FM_200 = string_fun(threshold = 200, 
+                           gene_list = genes_FM_list, 
+                           name_col = "gene", 
+                           min_size_clust = 1)
+# Confidence level of edges between genes at minimum 400
+string_FM_400 = string_fun(threshold = 400, 
+                           gene_list = genes_FM_list, 
+                           name_col = "gene", 
+                           min_size_clust = 1)
+# Confidence level of edges between genes at minimum 700
+string_FM_700 = string_fun(threshold = 700, 
+                           gene_list = genes_FM_list, 
+                           name_col = "gene", 
+                           min_size_clust = 5)
+
+```
+
+```{r, fig.show="hide"}
+
+# Confidence level of edges between genes at minimum 200
+string_EG_200 = string_fun(threshold = 200, 
+                           gene_list = genes_EG_list, 
+                           name_col = "GeneName", 
+                           min_size_clust = 1)
+# Confidence level of edges between genes at minimum 400
+string_EG_400 = string_fun(threshold = 400, 
+                           gene_list = genes_EG_list, 
+                           name_col = "GeneName", 
+                           min_size_clust = 1)
+# Confidence level of edges between genes at minimum 700
+string_EG_700 = string_fun(threshold = 700, 
+                           gene_list = genes_EG_list, 
+                           name_col = "GeneName", 
+                           min_size_clust = 1)
+
+```
+
+```{r, fig.width=10, fig.height=8}
+
+# Network with all clusters
+cat("Confidence level of edges between genes at minimum 200 : first -> FindMarkers, second -> EpiGIFT")
+string_FM_200$string_db$plot_network(string_FM_200$hits)
+string_EG_200$string_db$plot_network(string_EG_200$hits)
+
+cat("Confidence level of edges between genes at minimum 400 : first -> FindMarkers, second -> EpiGIFT")
+string_FM_400$string_db$plot_network(string_FM_400$hits) 
+string_EG_400$string_db$plot_network(string_EG_400$hits)
+
+cat("Confidence level of edges between genes at minimum 700 : first -> FindMarkers, second -> EpiGIFT")
+string_FM_700$string_db$plot_network(string_FM_700$hits)
+string_EG_700$string_db$plot_network(string_EG_700$hits)
+
+```
+
+```{r, fig.width=12, fig.height=14}
+
+# Clusters separately
+cat("Confidence level of edges between genes at minimum 200 : first -> FindMarkers, second -> EpiGIFT")
+par(mfrow = c(2,2))
+for (i in 1:length(string_FM_200$clusterList)) {
+  string_FM_200$string_db$plot_network(string_FM_200$clusterList[[i]])
+}
+par(mfrow = c(2,2))
+for (i in 1:length(string_EG_200$clusterList)) {
+  string_EG_200$string_db$plot_network(string_EG_200$clusterList[[i]])
+}
+
+cat("Confidence level of edges between genes at minimum 400 : first -> FindMarkers, second -> EpiGIFT")
+par(mfrow = c(3,3))
+for (i in 1:length(string_FM_400$clusterList)) {
+  string_FM_400$string_db$plot_network(string_FM_400$clusterList[[i]])
+}
+par(mfrow = c(2,2))
+for (i in 1:length(string_EG_400$clusterList)) {
+  string_EG_400$string_db$plot_network(string_EG_400$clusterList[[i]])
+}
+
+cat("Confidence level of edges between genes at minimum 700 : first -> FindMarkers, second -> EpiGIFT")
+par(mfrow = c(3,3))
+for (i in 1:length(string_FM_700$clusterList)) {
+  string_FM_700$string_db$plot_network(string_FM_700$clusterList[[i]])
+}
+par(mfrow = c(3,3))
+for (i in 1:length(string_EG_700$clusterList)) {
+  string_EG_700$string_db$plot_network(string_EG_700$clusterList[[i]])
+}
+
+```
+
+```{r, fig.width=10, fig.height=8}
+
+# Network with selected clusters
+cat("Confidence level of edges between genes at minimum 200 : first -> FindMarkers, second -> EpiGIFT")
+string_FM_200$string_db$plot_network(melt(string_FM_200$clusterList)$value)
+string_EG_200$string_db$plot_network(melt(string_EG_200$clusterList)$value)
+
+cat("Confidence level of edges between genes at minimum 400 : first -> FindMarkers, second -> EpiGIFT")
+string_FM_400$string_db$plot_network(melt(string_FM_400$clusterList)$value)
+string_EG_400$string_db$plot_network(melt(string_EG_400$clusterList)$value)
+
+cat("Confidence level of edges between genes at minimum 700 : first -> FindMarkers, second -> EpiGIFT")
+string_FM_700$string_db$plot_network(melt(string_FM_700$clusterList)$value)
+string_EG_700$string_db$plot_network(melt(string_EG_700$clusterList)$value)
+
+```
+
+
+```{r, Rsession}
+
+end_time = Sys.time()
+cat("Total execution time : ", as.numeric (end_time - start_time, units = "mins"), "minutes")
+
+# Show package version
+sessionInfo()
+
+```
+
+```{r}
+
+# Clean working space and memory 
+rm(list = ls())
+gc()
+
+```
+
+
+
