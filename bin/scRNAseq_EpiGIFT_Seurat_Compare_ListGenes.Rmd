@@ -1,0 +1,336 @@
+---
+title: "EpiGIFT_Seurat_Compare_ListGenes"
+author: "Laëtitia Racine"
+date: "2023-03-20"
+subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: "show"
+    toc: true
+    toc_float: false
+    theme: journal
+---
+
+<style>
+body {text-align: justify}
+div.beige {background-color:#FFE0B2; border-radius: 5px; padding: 8px;}
+div.red {background-color:#FF8A80; border-radius: 5px; padding: 8px;}
+div.orange {background-color:#FFB74D; border-radius: 5px; padding: 8px;}
+</style>
+
+```{r, Setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+```
+
+```{r, Dependencies}
+
+library(dplyr)
+library(Seurat)
+library(stringr)
+library(tidyverse)
+library(kableExtra)
+library(ggVennDiagram)
+library(ggplot2)
+
+```
+
+```{r, Working directories and external script}
+
+start_time = Sys.time()
+directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
+directory_data = paste0(directory, "data/")
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_Compare_ListGenes/"))
+directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_Compare_ListGenes/")
+
+```
+
+```{r}
+
+list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
+
+list_seurat_obj = lapply(list_seurat_obj, function(x) { 
+    SCTransform(object = x, 
+                assay = "RNA", 
+                new.assay.name = "SCT",
+                do.center = TRUE, 
+                do.scale = FALSE,
+                variable.features.n = NULL,
+                variable.features.rv.th = 1.3,
+                residual.features = NULL,
+                vars.to.regress = NULL,
+                min_cells = 1,
+                ncells = NULL,
+                verbose = FALSE,
+                # vst additional parameter
+                method = "glmGamPoi",
+                residual_type = "deviance",
+                n_genes = NULL)
+  })
+
+saveRDS(list_seurat_obj, file = paste0(directory_output, "list_seurat_obj_sctnorm.rds"))
+
+```
+
+
+
+<br><br><br>
+
+
+
+# Comparison of the list of genes 
+
+<br>
+
+**Load list of genes from EpiGift and FindMarkers**
+```{r}
+
+dir = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_FindMarkersList/")
+
+## CTRL vs DON
+genes_FM_list_CTRLDON = read.csv2(paste0(dir, "CTRL-DON_list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
+genes_FM_list_CTRLDON = unlist(as.vector(genes_FM_list_CTRLDON))
+genes_EG_list_CTRLDON = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")
+genes_EG_list_CTRLDON = genes_EG_list_CTRLDON$GeneName
+
+## CTRL vs 2DG
+genes_FM_list_CTRL2DG = read.csv2(paste0(dir, "CTRL-2DG_list_1021_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
+genes_FM_list_CTRL2DG = unlist(as.vector(genes_FM_list_CTRL2DG))
+
+## CTRL vs AOA
+genes_FM_list_CTRLAOA = read.csv2(paste0(dir, "CTRL-AOA_list_2569_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
+genes_FM_list_CTRLAOA = unlist(as.vector(genes_FM_list_CTRLAOA))
+
+```
+
+<br>
+
+**Compare lists of genes**
+```{r}
+
+## CTRL vs DON
+common_list_CTRLDON = intersect(genes_FM_list_CTRLDON, genes_EG_list_CTRLDON)
+only_FM_CTRLDON = setdiff(genes_FM_list_CTRLDON, genes_EG_list_CTRLDON)
+only_EG_CTRLDON = setdiff(genes_EG_list_CTRLDON, genes_FM_list_CTRLDON)
+
+cat("CTRL versus DON : \n",
+    "FindMarkers - Seurat :",  length(genes_FM_list_CTRLDON), "genes \n",
+    "EpiGIFT :", length(genes_EG_list_CTRLDON), "genes \n",
+    "Common genes :", length(common_list_CTRLDON), "\n",
+    "Only FindMarkers :", length(only_FM_CTRLDON), "\n",
+    "Only EpiGift :", length(only_EG_CTRLDON), "\n")
+
+## CTRL vs 2DG
+
+
+
+## CTRL vs AOA
+
+
+
+```
+
+<br>
+
+**Represent a venn diagramm**
+```{r}
+
+## CTRL vs DON
+ggVennDiagram(x = list(FindMarkers_CTRL_DON = genes_FM_list_CTRLDON, 
+                       EpiGift_CTRL_DON = genes_EG_list_CTRLDON)) +
+  theme(legend.position = "none") 
+
+## CTRL vs 2DG
+
+
+## CTRL vs AOA
+
+```
+
+
+
+<br><br><br>
+
+
+
+# Teta path on list only FindMarkers
+
+
+
+
+
+
+
+
+
+<br><br><br>
+
+
+
+# Log2FoldChange and Wilcoxon Test on list only EpiGift
+
+```{r, Function definition FM manual}
+
+FindMarkers_FC_wilcox = function(list_seurat, drugs_choice, list_genes) {
+  
+  # Select drugs and merge 
+  merge_obj = merge(x = list_seurat[[drugs_choice[1]]], 
+                    y = list_seurat[[drugs_choice[2]]],
+                    add.cell.ids = drugs_choice,
+                    merge.data = TRUE)
+  
+  # Variable features
+  VariableFeatures(merge_obj) = rownames(merge_obj[["SCT"]]@scale.data)
+  
+  # Linear reduction and clustering
+  merge_obj = RunPCA(object = merge_obj, 
+                     assay = "SCT", 
+                     npcs = 100,
+                     reduction.name = "pca", 
+                     seed.use = 42, 
+                     verbose = FALSE)
+  merge_obj = RunUMAP(object = merge_obj, 
+                      assay = "SCT", 
+                      dims = c(1:40), 
+                      set.seed = 42,
+                      reduction =  "pca", 
+                      reduction.name = "umap", 
+                      verbose = FALSE)
+  merge_obj = FindNeighbors(object = merge_obj, assay = "SCT", dims = c(1:40))
+  merge_obj = FindClusters(object = merge_obj, resolution = 0.6, algorithm = 3)
+  
+  # Prepare the object for FindMarkers
+  Idents(merge_obj) <- "orig.ident"
+  merge_obj <- PrepSCTFindMarkers(merge_obj)
+
+  # Extract Matrix with cells from ident.1 and another with cells from ident.2
+  ident1 = data.frame(merge_obj@assays$SCT@data) %>% dplyr::select(starts_with(paste0(drugs_choice[1], "_")))
+  ident2 =  data.frame(merge_obj@assays$SCT@data) %>% dplyr::select(starts_with(paste0(drugs_choice[2], "_")))
+
+  # Filter to keep only genes in list_genes
+  ident1_f = ident1 %>% dplyr::filter(rownames(ident1) %in% list_genes)
+  ident2_f = ident2 %>% dplyr::filter(rownames(ident2) %in% list_genes)
+    
+  # Compute expm1 on each value (exp(value) - 1)
+  ident1_expm1 = expm1(ident1_f)
+  ident2_expm1 = expm1(ident2_f)
+  
+  # Compute the mean +1 for each ident
+  ident1_mean = rowMeans(ident1_expm1) + 1
+  ident2_mean = rowMeans(ident2_expm1) + 1
+  
+  # Compute the log and the difference 
+  ident1_log2 = log2(ident1_mean)
+  ident2_log2 = log2(ident2_mean)
+  avg_log2FC = ident1_log2 - ident2_log2
+  df_avg_log2FC = data.frame(avg_log2FC) %>% tibble::rownames_to_column("gene")
+  
+  # Add a column to say if those genes would have been kept with the threshold value
+  df_avg_log2FC = df_avg_log2FC %>% dplyr::mutate(pass_logfc.threshold = ifelse(abs(avg_log2FC) > 0.15, TRUE, FALSE))
+
+  # Wilcoxon test
+  tab_wilcox = list()
+  for (i in 1:nrow(ident1_f)) {
+    gene = rownames(ident1_f)[i]
+    x = unlist(as.vector(ident1_f %>% dplyr::filter(rownames(ident1_f) == gene)))
+    y = unlist(as.vector(ident2_f %>% dplyr::filter(rownames(ident2_f) == gene)))
+    tab_wilcox[gene] = wilcox.test(x, y)$p.value
+  }
+  tab_wilcox = as.data.frame(do.call(rbind, tab_wilcox)) 
+  colnames(tab_wilcox) = "p.value"
+  tab_wilcox = tab_wilcox %>% 
+    tibble::rownames_to_column("gene") %>%
+    dplyr::mutate(p.adj = p.adjust(tab_wilcox$p.value, "bonferroni", nrow(tab_wilcox)))
+  
+  # Join table with avg_log2FC
+  final_tab = left_join(tab_wilcox, df_avg_log2FC, by = "gene")
+  
+  # output
+  return(final_tab)
+  
+}
+
+```
+
+```{r, Call function FM manual}
+
+EG_FindMarkerscalcul_CTRLDON = FindMarkers_FC_wilcox(list_seurat = list_seurat_obj,
+                                                     drugs_choice = c("CTRL", "DON"), 
+                                                     list_genes = genes_EG_list_CTRLDON)
+
+# EG_FindMarkerscalcul_CTRL2DG= FindMarkers_FC_wilcox(list_seurat = list_seurat_obj,
+#                                                     drugs_choice = c("CTRL", "2DG"), 
+#                                                     list_genes = genes_EG_list_CTRL2DG)
+# 
+# EG_FindMarkerscalcul_CTRLAOA = FindMarkers_FC_wilcox(list_seurat = list_seurat_obj,
+#                                                      drugs_choice = c("CTRL", "AOA"), 
+#                                                      list_genes = genes_EG_list_CTRLAOA)
+
+saveRDS(EG_FindMarkerscalcul_CTRLDON, paste0(directory_output, "EG_FindMarkerscalcul_CTRLDON.rds"))
+# saveRDS(EG_FindMarkerscalcul_CTRL2DG, paste0(directory_output, "EG_FindMarkerscalcul_CTRL2DG.rds"))
+# saveRDS(EG_FindMarkerscalcul_CTRLAOA, paste0(directory_output, "EG_FindMarkerscalcul_CTRLAOA.rds"))
+
+```
+
+```{r, Visualize the result FM manual, fig.width = 16, fig.height = 6}
+
+tab_CTRLDON = EG_FindMarkerscalcul_CTRLDON
+# tab_CTRL2DG = EG_FindMarkerscalculCTRL2DG
+# tab_CTRLAOA = EG_FindMarkerscalculCTRLAOA
+
+tab_CTRLDON %>%
+  kable(caption = "CTRL vs DON : pvalue for genes from EpiGift that passed the log2fc threshold") %>%
+  kable_styling() %>%
+  scroll_box(height = "250px", width = "100%")
+
+
+plot_FC = ggplot(tab_CTRLDON, aes(x = gene, y = abs(avg_log2FC))) +
+  geom_point() +
+  geom_hline(yintercept = 0.15, linetype = "dashed", color = "red") +
+  theme(axis.text.x = element_text(angle = 90, size = 6)) +
+  ggtitle("CTRL vs DON - EpiGIFT list - Threshold on avg_log2FC value")
+plot_FC
+
+cat("Number of genes that passed the threshold on log fold change :")
+table(tab_CTRLDON$pass_logfc.threshold)
+
+plot_pval = ggplot(tab_CTRLDON, aes(x = gene, y = p.adj)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, size = 6)) +
+  ggtitle("CTRL vs DON - EpiGIFT list - pvalue adjusted of all EpiGIFT genes")
+plot_pval
+
+plot_pval_cut = ggplot(tab_CTRLDON %>% dplyr::filter(p.adj < 0.25), aes(x = gene, y = p.adj)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, size = 6)) +
+  ggtitle("CTRL vs DON - EpiGIFT list - pvalue adjusted of all EpiGIFT genes")
+plot_pval_cut
+
+plot_pval_filter = ggplot(tab_CTRLDON %>% dplyr::filter(pass_logfc.threshold  == TRUE), 
+                   aes(x = gene, y = p.adj)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, size = 6)) +
+  ggtitle("CTRL vs DON - EpiGIFT list - pvalue adjusted of genes that passed the log2FC threshold")
+plot_pval_filter
+
+genes_EG_passFM_CTRLDON = (tab_CTRLDON %>% dplyr::filter(pass_logfc.threshold  == TRUE))$gene
+setdiff(genes_EG_passFM_CTRLDON, common_list_CTRLDON)
+
+cat("We didn't identify all the genes from EpiGIFT method with the FindMarkers method because they didn't pass the log2FC threshold.")
+
+```
+
+
+
+
+<br><br><br>
+
+
+
+# Pvalue : rank and comparison
+
+
+
