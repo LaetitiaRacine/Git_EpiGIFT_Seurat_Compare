@@ -71,9 +71,8 @@ Those genes are supposed to be significantly different in their expression betwe
 
 ```{r, Load Input data}
 
-dir = paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/")
-genes_FM_list = readRDS(paste0(dir, "/", "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
-genes_FM_list = genes_FM_list[["wilcox"]]
+dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_FindMarkers_ListGenes/"))
+genes_FM_list = readRDS(paste0(dir,"/CTRL-DON_list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
 
 genes_EG_list = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")
   
@@ -92,6 +91,10 @@ cat("FindMarkers - Seurat :",  nrow(genes_FM_list), "genes \n",
     "Only EpiGift :", length(only_EG), "\n")
 
 ```
+
+
+<br><br><br>
+
 
 # Gene Ontology
 
@@ -295,6 +298,9 @@ ggplot(tab_comp_common, aes(x=GeneRatio, y=Description)) +
 
 ```
 
+
+<br><br><br>
+
 # String Analysis
 
 ```{r, function String}
@@ -451,6 +457,20 @@ string_EG_700$string_db$plot_network(melt(string_EG_700$clusterList)$value)
 ```
 
 
+
+<br><br><br>
+
+
+# Conclusion 
+
+<br>
+
+
+
+<br><br><br>
+
+****
+
 ```{r, Rsession}
 
 end_time = Sys.time()
@@ -468,6 +488,3 @@ rm(list = ls())
 gc()
 
 ```
-
-
-

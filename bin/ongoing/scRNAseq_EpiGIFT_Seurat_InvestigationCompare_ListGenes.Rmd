@@ -330,7 +330,3 @@ cat("We didn't identify all the genes from EpiGIFT method with the FindMarkers m
 
 
 
-# Pvalue : rank and comparison
-
-
-

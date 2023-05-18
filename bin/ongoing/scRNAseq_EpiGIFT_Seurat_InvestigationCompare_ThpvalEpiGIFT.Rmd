@@ -1,5 +1,5 @@
 ---
-title: "EpiGift_FindMarkers_Compare - EpiGift pvalue threshold"
+title: "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ThpvalEpiGIFT"
 author: "Laëtitia Racine"
 date: "2023-03-15"
 output: html_document
@@ -38,15 +38,24 @@ source(file = paste0(directory, "bin/", "Epi_FM_functions_constants.R"))
 
 ```
 
-We have the list from FindMarkers with threshold 0.15 and Wilcoxon test.  
+
+****
+
+<br><br><br>
+
+
+# Overview 
+
+<br>
+
+We have one list from FindMarkers with threshold 0.15 and Wilcoxon test (cf. scRNAseq_EpiGIFT_Seurat_FindMarkers_ListGenes.Rmd).    
 We have several lists of EpiGift depending the threshold used on pvalue : 25, 30, 35 or 40.  
-We want to see the common list between them.
+We want to see the common genes between them.
 
 ```{r, Input loading}
 
-dir = paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/")
-genes_FM = readRDS(paste0(dir,"list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
-genes_FM = genes_FM[["wilcox"]]
+dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_FindMarkers_ListGenes/"))
+genes_FM = readRDS(paste0(dir,"/CTRL-DON_list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
 genes_FM = genes_FM$gene
 
 genes_Epi_t40 = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")$GeneName
@@ -55,6 +64,12 @@ genes_Epi_t30 = read.csv2(paste0(directory_data, "20230314_list_325genes_pSNP5gt
 genes_Epi_t35 = read.csv2(paste0(directory_data, "20230314_list_235genes_pSNP5gt35.csv"), sep =",")$GeneName
 
 ```
+
+<br>
+
+# Overlap between the lists
+
+<br>
 
 ```{r, fig.width = 16, fig.height = 8}
 
@@ -88,6 +103,18 @@ plot1 | plot2 | plot3
 
 ```
 
+<br>
+
+
+# Conclusion 
+
+<br>
+
+
+
+<br><br><br>
+
+****
 
 ```{r, Rsession}
 

@@ -1,0 +1,229 @@
+---
+title: "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_pvalue"
+author: "Laëtitia Racine & Giota Kyratzi"
+date: "2023-03-09"
+subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: "hide"
+    toc: true
+    toc_float: false
+    theme: journal
+---
+
+<style>
+body {text-align: justify}
+</style>
+
+```{r, Setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+```
+
+```{r, Dependencies}
+
+library(dplyr)
+library(Seurat)
+library(stringr)
+library(ggplot2)
+library(ggVennDiagram)
+
+```
+
+```{r, Working directory and external script}
+
+# Load working directories
+directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
+directory_data = paste0(directory, "data/")
+start_time = Sys.time()
+
+# Load external script with functions and constants
+source(file = paste0(directory, "bin/", "Epi_FM_functions_constants.R"))
+
+# Define a color code for list category 
+
+color_code = c(
+  "common_FM_EG" = "#6922FB",
+  "only_EG" = "#F73131",
+  "only_FM" = "#2E9EFF"
+)
+
+```
+
+
+<br><br><br>
+
+
+# Script's objective and reminder of previous analysis
+
+To write = see if pvalue of common gene are smaller than one of non common genes
+
+Abbreviations : 
+- FM = FindMarkers() function, classical Seurat analysis based on fold change of average  
+- EG = EpiGIFT method, new analysis based on each individual  
+  
+```{r, Load Input data}
+
+dir = paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/")
+
+# à faire : reprendre le script de comparaison des listes et enregistrer les listes common, onlyFM, onlyEG
+genes_FM_list = readRDS(paste0(dir, "/", "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
+genes_FM_list = genes_FM_list[["wilcox"]]
+
+genes_EG_list = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")
+  
+common_list = intersect(genes_FM_list$gene, genes_EG_list$GeneName)
+only_FM_list = setdiff(genes_FM_list$gene, genes_EG_list$GeneName)
+only_EG_list = setdiff(genes_EG_list$GeneName, genes_FM_list$gene)
+
+```
+
+```{r}
+
+cat("CTRL versus DON : \n",
+    "FindMarkers - Seurat :",  length(genes_FM_list), "genes \n",
+    "EpiGIFT :", length(genes_EG_list), "genes \n",
+    "Common genes :", length(common_list), "\n",
+    "Only FindMarkers :", length(only_FM_list), "\n",
+    "Only EpiGift :", length(only_EG_list), "\n")
+
+# change color to correspond to color code 
+ggVennDiagram(x = list(FindMarkers= genes_FM_list$gene, 
+                       EpiGift= genes_EG_list$GeneName)) +
+  theme(legend.position = "none") 
+
+```
+
+```{r, Add list category information in tables}
+
+genes_EG_list = genes_EG_list %>%
+  dplyr::mutate(list_category = case_when(GeneName %in% common_list ~ "common_FM_EG",
+                                          GeneName %in% only_EG_list ~ "only_EG",
+                                          GeneName %in% only_FM_list ~ "only_FM"))
+
+genes_FM_list = genes_FM_list %>%
+  dplyr::mutate(list_category = case_when(gene %in% common_list ~ "common_FM_EG",
+                                          gene %in% only_EG_list ~ "only_EG",
+                                          gene %in% only_FM_list ~ "only_FM"))
+
+```
+
+
+
+<br><br><br>
+
+
+
+# pValue distribution of FindMarkers 
+
+```{r}
+
+# Reorder rows by ascending order of pvalue adjusted
+genes_FM_list = genes_FM_list %>% dplyr::arrange(p_val_adj)
+genes_order = genes_FM_list$gene
+genes_FM_list$gene = factor(genes_FM_list$gene , levels = genes_order)
+
+```
+
+```{r, fig.height = 6, fig.width = 20}
+
+# Represent the data
+ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
+  geom_point() +
+  scale_color_manual(values = color_code) +
+  xlab(label = "Gene Name") +
+  ylab(label = "pvalue adjusted") +
+  ggtitle(label = "Ordered pvalue distribution for FM list of genes") +
+  theme(axis.text.x = element_text(angle = 90, size = 6))
+
+```
+
+```{r, fig.height = 6, fig.width = 20}
+
+# Zoom in
+ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
+  geom_point() +
+  scale_color_manual(values = color_code) +
+  xlab(label = "Gene Name") +
+  ylab(label = "pvalue adjusted") +
+  coord_cartesian(ylim= c(0, 0.00025)) +
+  scale_y_continuous(breaks=seq(0,0.00025, 0.00001)) +
+  ggtitle(label = "Ordered pvalue distribution for FM list of genes",
+          subtitle = "Zoom on values near 0") +
+  theme(axis.text.x = element_text(angle = 90, size = 6))
+
+```
+
+```{r, fig.height = 10, fig.width = 20}
+
+# Zoom in
+ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
+  geom_point() +
+  scale_color_manual(values = color_code) +
+  xlab(label = "Gene Name") +
+  ylab(label = "pvalue adjusted") +
+  coord_cartesian(ylim= c(0, 0.000005)) +
+  scale_y_continuous(breaks=seq(0,0.000005, 0.0000001)) +
+  ggtitle(label = "Ordered pvalue distribution for FM list of genes",
+          subtitle = "Zoom on values near 0") +
+  theme(axis.text.x = element_text(angle = 90, size = 6))
+
+```
+
+<br><br><br>
+
+
+
+# pvalue distribution of EpiGIFT
+
+```{r}
+
+```
+
+
+
+<br><br><br>
+
+
+
+# pvalue distribution of FindMarkers against pvalue distribution of EpiGIFT
+
+```{r}
+
+# Create a table with name of the gene, list_category, pvalue in FM (put at 1 if not present), pvalue in EG
+# Draw one graph for each SNP
+
+
+```
+
+
+
+# Conclusion
+   
+To write 
+
+
+<br><br><br>
+
+
+
+```{r, Rsession}
+
+end_time = Sys.time()
+cat("Total execution time : ", as.numeric (end_time - start_time, units = "mins"), "minutes")
+
+# Show package version
+sessionInfo()
+
+```
+
+```{r}
+
+# Clean working space and memory 
+rm(list = ls())
+gc()
+
+```
