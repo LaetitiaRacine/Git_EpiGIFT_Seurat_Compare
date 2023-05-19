@@ -106,7 +106,7 @@ Find markers function's code :
 9) the initial matrix is filtered to keep only genes from genes.use    
 10) a statistical test (default = wilcoxon) is performed    
 11) the output of the test is a table with pvalue    
-12) bonferonni correction is applied to calcul the p value adjusted 
+12) bonferroni correction is applied to calcul the p value adjusted (bonferroni : multiply the pval by the number of comparison (ie. nb genes in the seurat object = 22084))
   
 We obtain as an *output* a data.frame with a ranked list of putative markers as rows, and associated statistics as columns (p-values, ROC score, etc., depending on the test used (test.use)). The following columns are always present:  
     • avg_log2FC: log2 fold-change of the average expression between the two groups. Positive values indicate that the gene is more highly expressed in the first group  
@@ -174,17 +174,17 @@ extract_list_FM = function(list_seurat, drug_choice){
 
   # FindMarkers function application
   genes = FindMarkers(object = merge_obj, 
-                        assay = "SCT", 
-                        ident.1 = drug_choice[1], 
-                        ident.2 = drug_choice[2], 
-                        logfc.threshold = 0.15,
-                        slot = "data",
-                        group.by = NULL,
-                        subset.ident = NULL,
-                        features = NULL,
-                        test.use = "wilcox",
-                        pseudocount.use = 1,
-                        verbose = FALSE) %>% 
+                      assay = "SCT", 
+                      ident.1 = drug_choice[1], 
+                      ident.2 = drug_choice[2], 
+                      logfc.threshold = 0.15,
+                      slot = "data",
+                      group.by = NULL,
+                      subset.ident = NULL,
+                      features = NULL,
+                      test.use = "wilcox",
+                      pseudocount.use = 1,
+                      verbose = FALSE) %>% 
       tibble::rownames_to_column("gene") %>%
       dplyr::filter(p_val_adj <= 0.05)
     

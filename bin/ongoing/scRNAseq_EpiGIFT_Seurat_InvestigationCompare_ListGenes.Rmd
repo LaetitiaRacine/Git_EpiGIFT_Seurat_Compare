@@ -1,5 +1,5 @@
 ---
-title: "EpiGIFT_Seurat_Compare_ListGenes"
+title: "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes"
 author: "Laëtitia Racine"
 date: "2023-03-20"
 subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
@@ -38,42 +38,41 @@ library(ggplot2)
 
 ```
 
-```{r, Working directories and external script}
+```{r, Working directories and constants}
 
 start_time = Sys.time()
 directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
 directory_data = paste0(directory, "data/")
-dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_Compare_ListGenes/"))
-directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_Compare_ListGenes/")
+current_date = format(Sys.time(), "%Y%m%d")
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/"))
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/", current_date))
+directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/", current_date, "/")
+
+# Define a color code for list category 
+color_code = c(
+  "common_FM_EG" = "#6922FB",
+  "only_EG" = "#F73131",
+  "only_FM" = "#2E9EFF"
+)
+
+# Load external script with functions and constants
+source(file = paste0(directory, "bin/Epi_FM_functions_constants.R"))
 
 ```
 
-```{r}
 
-list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
+****
 
-list_seurat_obj = lapply(list_seurat_obj, function(x) { 
-    SCTransform(object = x, 
-                assay = "RNA", 
-                new.assay.name = "SCT",
-                do.center = TRUE, 
-                do.scale = FALSE,
-                variable.features.n = NULL,
-                variable.features.rv.th = 1.3,
-                residual.features = NULL,
-                vars.to.regress = NULL,
-                min_cells = 1,
-                ncells = NULL,
-                verbose = FALSE,
-                # vst additional parameter
-                method = "glmGamPoi",
-                residual_type = "deviance",
-                n_genes = NULL)
-  })
+<br><br><br>
 
-saveRDS(list_seurat_obj, file = paste0(directory_output, "list_seurat_obj_sctnorm.rds"))
 
-```
+
+# Overview
+
+<br>
+
+Add comments here explaining what this code is aims at.
+
 
 
 
@@ -88,21 +87,21 @@ saveRDS(list_seurat_obj, file = paste0(directory_output, "list_seurat_obj_sctnor
 **Load list of genes from EpiGift and FindMarkers**
 ```{r}
 
-dir = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_FindMarkersList/")
+dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_FindMarkers_ListGenes/"))
 
 ## CTRL vs DON
-genes_FM_list_CTRLDON = read.csv2(paste0(dir, "CTRL-DON_list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
+genes_FM_list_CTRLDON = read.csv2(paste0(dir, "/", "CTRL-DON_list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
 genes_FM_list_CTRLDON = unlist(as.vector(genes_FM_list_CTRLDON))
 genes_EG_list_CTRLDON = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")
 genes_EG_list_CTRLDON = genes_EG_list_CTRLDON$GeneName
 
-## CTRL vs 2DG
-genes_FM_list_CTRL2DG = read.csv2(paste0(dir, "CTRL-2DG_list_1021_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
-genes_FM_list_CTRL2DG = unlist(as.vector(genes_FM_list_CTRL2DG))
-
-## CTRL vs AOA
-genes_FM_list_CTRLAOA = read.csv2(paste0(dir, "CTRL-AOA_list_2569_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
-genes_FM_list_CTRLAOA = unlist(as.vector(genes_FM_list_CTRLAOA))
+# ## CTRL vs 2DG
+# genes_FM_list_CTRL2DG = read.csv2(paste0(dir, "/", "CTRL-2DG_list_1021_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
+# genes_FM_list_CTRL2DG = unlist(as.vector(genes_FM_list_CTRL2DG))
+# 
+# ## CTRL vs AOA
+# genes_FM_list_CTRLAOA = read.csv2(paste0(dir, "/", "CTRL-AOA_list_2569_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
+# genes_FM_list_CTRLAOA = unlist(as.vector(genes_FM_list_CTRLAOA))
 
 ```
 
@@ -123,13 +122,9 @@ cat("CTRL versus DON : \n",
     "Only FindMarkers :", length(only_FM_CTRLDON), "\n",
     "Only EpiGift :", length(only_EG_CTRLDON), "\n")
 
-## CTRL vs 2DG
-
-
-
-## CTRL vs AOA
-
-
+saveRDS(object = common_list_CTRLDON, file = paste0(directory_output, "list_genes_CTRL-DON_commonEGFM.rds"))
+saveRDS(object = only_FM_CTRLDON, file = paste0(directory_output, "list_genes_CTRL-DON_onlyFM.rds"))
+saveRDS(object = only_EG_CTRLDON, file = paste0(directory_output, "list_genes_CTRL-DON_onlyEG.rds"))
 
 ```
 
@@ -140,13 +135,9 @@ cat("CTRL versus DON : \n",
 
 ## CTRL vs DON
 ggVennDiagram(x = list(FindMarkers_CTRL_DON = genes_FM_list_CTRLDON, 
-                       EpiGift_CTRL_DON = genes_EG_list_CTRLDON)) +
-  theme(legend.position = "none") 
+                       EpiGift_CTRL_DON = genes_EG_list_CTRLDON))+
+  theme(legend.position = "none")
 
-## CTRL vs 2DG
-
-
-## CTRL vs AOA
 
 ```
 
@@ -240,10 +231,11 @@ FindMarkers_FC_wilcox = function(list_seurat, drugs_choice, list_genes) {
     tab_wilcox[gene] = wilcox.test(x, y)$p.value
   }
   tab_wilcox = as.data.frame(do.call(rbind, tab_wilcox)) 
-  colnames(tab_wilcox) = "p.value"
+  colnames(tab_wilcox) = "p_val"
   tab_wilcox = tab_wilcox %>% 
     tibble::rownames_to_column("gene") %>%
-    dplyr::mutate(p.adj = p.adjust(tab_wilcox$p.value, "bonferroni", nrow(tab_wilcox)))
+    # manual bonferroni correction (multiply the pvalue by the total number of comparison (all genes of the seurat obj))
+    dplyr::mutate(p_val_adj = tab_wilcox$p_val * nrow(merge_obj)) 
   
   # Join table with avg_log2FC
   final_tab = left_join(tab_wilcox, df_avg_log2FC, by = "gene")
@@ -252,6 +244,31 @@ FindMarkers_FC_wilcox = function(list_seurat, drugs_choice, list_genes) {
   return(final_tab)
   
 }
+
+```
+
+```{r, Loading seurat obj}
+
+list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
+
+list_seurat_obj = lapply(list_seurat_obj, function(x) { 
+    SCTransform(object = x, 
+                assay = "RNA", 
+                new.assay.name = "SCT",
+                do.center = TRUE, 
+                do.scale = FALSE,
+                variable.features.n = NULL,
+                variable.features.rv.th = 1.3,
+                residual.features = NULL,
+                vars.to.regress = NULL,
+                min_cells = 1,
+                ncells = NULL,
+                verbose = FALSE,
+                # vst additional parameter
+                method = "glmGamPoi",
+                residual_type = "deviance",
+                n_genes = NULL)
+  })
 
 ```
 
@@ -323,10 +340,39 @@ cat("We didn't identify all the genes from EpiGIFT method with the FindMarkers m
 
 ```
 
+<br>
+
+
+
+
+# Conclusion
+
+Add conclusion here !
+
+
+
 
 
 
 <br><br><br>
 
 
+****
 
+```{r, Rsession}
+
+end_time = Sys.time()
+cat("Total execution time : ", as.numeric (end_time - start_time, units = "mins"), "minutes")
+
+# Show package version
+sessionInfo()
+
+```
+
+```{r, results='hide'}
+
+# Clean working space and memory 
+rm(list = ls())
+gc()
+
+```
