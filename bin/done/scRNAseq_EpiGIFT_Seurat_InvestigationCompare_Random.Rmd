@@ -1,0 +1,176 @@
+---
+title: "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_Random"
+author: "Laëtitia Racine"
+date: "2023-02-15"
+subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: "hide"
+    toc: true
+    toc_float: false
+    theme: journal
+---
+    
+```{r, Setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+```
+
+```{r, Dependencies}
+
+library(dplyr)
+library(Seurat)
+library(sctransform)
+library(stringr)
+library(tidyverse)
+library(kableExtra)
+
+```
+
+```{r, Working directories and external script}
+
+start_time = Sys.time()
+directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
+directory_data = paste0(directory, "data/")
+current_date = format(Sys.time(), "%Y%m%d")
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_Random/"))
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_Random/"), current_date)
+directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_Random/", current_date, "/")
+
+# Load external script with functions and constants
+source(file = paste0(directory, "bin/Epi_FM_functions_constants.R"))
+
+```
+
+
+****
+
+
+<br><br><br>
+
+
+
+# Overview 
+
+<br>
+
+We have lists from FindMarkers with different thresholds and Wilcoxon test (cf. scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat).      
+We have two lists from EpiGift depending the number of bin fixed (bin 70 => 130 genes, bin 30 => 365 genes).  
+We have a certain number of common genes between Epigift lists and FM lists.    
+We want to see :    
+1) if the overlapping number increase when we change FM threshold on logFC    
+2) if this number can be just "luck" so we compare to a random selection of genes    
+
+```{r, Input loading}
+
+# List of 130 genes with threshold bin 70 in EpiGift
+epi_130 = read.csv2(paste0(directory, "data/", "20230220_EpiGift_Variable130Genes.csv"), sep = ",")
+epi_130 = epi_130[,2]
+# List of 365 genes with threshold bin 30 in EpiGift
+epi_365 = read.csv2(paste0(directory, "data/", "20230220_EpiGift_Variable365Genes.csv"), sep = ",")
+epi_365 = epi_365[,2]
+# List of FM genes and object merge_fm
+dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/"))
+list_FM_genes = readRDS(paste0(dir, "/list_genes_FM_different_thresholds.rds"))
+merge_fm = readRDS(paste0(dir, "/merge_fm.rds"))
+
+```
+  
+  
+<br><br><br>
+  
+  
+# FM threshold and random gene selection  
+  
+```{r}
+
+# See if the overlap increases proportionally or not
+
+list_overlap_FM_epi130 = list()
+list_overlap_FM_epi365 = list()
+list_overlap_FM_random130 = list()
+list_overlap_FM_random365 = list()
+
+for (i in 1:length(list_FM_genes)) {
+  
+  threshold = names(list_FM_genes)[i]
+  
+  # List of 130 and 365 random genes extract from the matrix to compare
+  random_130 = sample(rownames(merge_fm), 130)
+  random_365 = sample(rownames(merge_fm), 365)
+  
+  # List of FM genes
+  genes = list_FM_genes[[i]]
+  
+  list_overlap_FM_epi130[threshold] = list(intersect(epi_130, genes))
+  list_overlap_FM_epi365[threshold] = list(intersect(epi_365, genes))
+  list_overlap_FM_random130[threshold] = list(intersect(random_130, genes))
+  list_overlap_FM_random365[threshold] = list(intersect(random_365, genes))
+  
+}
+
+tab_comp = data.frame(Nbgenes_FindMarkers = lengths(list_FM_genes),
+                      Nbgenes_overlap_FM_epi130 = lengths(list_overlap_FM_epi130),
+                      Nbgenes_overlap_FM_epi365 = lengths(list_overlap_FM_epi365),
+                      Nbgenes_overlap_FM_random130 = lengths(list_overlap_FM_random130),
+                      Nbgenes_overlap_FM_random365 = lengths(list_overlap_FM_random365)) %>%
+  tibble::rownames_to_column("FindMarkers_logfc_threshold")
+
+tab_comp %>%
+  kable() %>%
+  kable_styling() %>%
+  scroll_box(height = "250px", width = "100%")
+
+tab_plot = tab_comp %>% 
+  tidyr::pivot_longer(cols=c(2:ncol(tab_comp)),
+                      names_to="Category",
+                      values_to="Nbgenes")
+
+plot = ggplot(tab_plot, aes(x=FindMarkers_logfc_threshold, y=Nbgenes, 
+                            shape=Category, col=Category)) +
+  geom_point()
+plot
+
+ggsave(plot = plot, filename = paste0(directory_output, "overlap_EpiGiftgenes_FindMarkersgenes.png")) 
+write.csv2(x = tab_comp, file = paste0(directory_output, "tab_comp_EpiGift_FindMarkers.csv"))
+
+```
+
+
+<br><br><br>
+
+
+# Conclusion 
+
+When we increase the threshold on logfc for FindMarkers function :  
+- the number of significant genes in FindMarkers list decreases  
+- the number of genes overlapping with EpiGIFT genes (130 and 365) decreases also BUT not propotionnaly  
+When we compared our FM list with the same number of random genes than EpiGIFT list, we have much less common genes => the overlap between EpiGIFT and FM list is not just random luck.  
+We keep logfc.threshold = 0.15 for FindMarkers function.  
+
+
+<br><br><br>
+
+
+****
+
+```{r, Rsession}
+
+end_time = Sys.time()
+cat("Total execution time : ", as.numeric (end_time - start_time, units = "mins"), "minutes")
+
+# Show package version
+sessionInfo()
+
+```
+
+```{r, results='hide'}
+
+# Clean working space and memory 
+rm(list = ls())
+gc()
+
+```
