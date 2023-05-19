@@ -5,7 +5,7 @@ date: "2023-03-20"
 subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
-    code_folding: "show"
+    code_folding: "hide"
     toc: true
     toc_float: false
     theme: journal
@@ -39,10 +39,16 @@ library(kableExtra)
 start_time = Sys.time()
 directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
 directory_data = paste0(directory, "data/")
-dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_FindMarkersList/"))
-directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_FindMarkersList/")
+current_date = format(Sys.time(), "%Y%m%d")
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_FindMarkers_ListGenes/"))
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_FindMarkers_ListGenes/", current_date))
+directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_FindMarkers_ListGenes/", current_date, "/")
 
 ```
+
+****
+
+The data we use are part of a big dataset of 10XscRNAseq together with CITEseq from 10 conditions (cf. Git_Differentiation_Metabolism, output of the scRNAseq_CITEseq_R_NormalizeData.R script before the SCT normalization). Here, we only use the cells from two conditions at the time. The whole dataset was already analyzed using the standard Seurat method. Two filters were applied on cells (keep only cells with 1000 to 6500 genes detected and keep only cells with less than 25% of mRNA and more than 5% of rRNA) and two filters were applied on genes (remove mitochondrial genes and remove genes detected in less than 3 cells). 
 
 
 
@@ -52,9 +58,9 @@ directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_FindMarkersLis
 
 # Script's objective 
 
-The data we use are part of a big dataset of 10XscRNAseq together with CITEseq from 10 conditions (cf. Git_Differentiation_Metabolism, output of the scRNAseq_CITEseq_R_NormalizeData.R script before the SCT normalization)  . Here, we only use the cells from two conditions. The whole dataset was already analyzed using the standard Seurat method. Two filters were applied on cells (keep only cells with 1000 to 6500 genes detected and keep only cells with less than 25% of mRNA and more than 5% of rRNA) and two filters were applied on genes (remove mitochondrial genes and remove genes detected in less than 3 cells). 
-
 <br>
+
+Extracting list of differentially expressed genes between two conditions using the FindMarkers() function from Seurat package.   
 
 ```{r, Input loading}
 
@@ -62,7 +68,7 @@ list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
 
 ```
 
-
+Nb : the first part of this script is a copy of what we can find in *scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat.Rmd*. We decided to clean the code in here to keep only the chosen parameters and function.  
 
 
 <br><br><br>
@@ -71,16 +77,18 @@ list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
 
 # FindMarkers function explanation
 
+<br>
+
 Documentation :    
 https://satijalab.org/seurat/reference/findmarkers      
 https://github.com/satijalab/seurat/blob/96d07d80bc4b6513b93e9c10d8a9d57ae7016f9f/R/differential_expression.R#L176-L178        
 https://github.com/satijalab/seurat/issues/467      
 https://satijalab.org/seurat/articles/v4_changes.html      
-      
+       
 The function has some interesting parameters that we need to look at :    
 - logfc.threshold = 0.25 : limit testing to genes which show, on average, at least X-fold difference (log2-scale !!! change in Seurat v4) between the two groups of cells    
 - max.cells.per.ident = -Inf : no downsampling on the cells      
-- features = NULL : use all genes to test => **list of variable features has no consequence here**  
+- features = NULL : use all genes to test => *list of variable features has no consequence here*   
 - min.pct = 0.1 : only test genes that are detected in a minimum fraction of min.pct cells in either of the two populations    
 - test.use = wilcox : test to use for the differential analysis. Lots of options are available here : wilcox (rank sum test), bimod (likelihood-ratio test), roc, t-test, negbinom, poisson, LR (logistic regression), MAST (hurdle model) and DESeq2 (negative binomial distribution). See documentation for more informations.    
   
@@ -100,7 +108,7 @@ Find markers function's code :
 11) the output of the test is a table with pvalue    
 12) bonferonni correction is applied to calcul the p value adjusted 
   
-We obtain as an **output** a data.frame with a ranked list of putative markers as rows, and associated statistics as columns (p-values, ROC score, etc., depending on the test used (test.use)). The following columns are always present:  
+We obtain as an *output* a data.frame with a ranked list of putative markers as rows, and associated statistics as columns (p-values, ROC score, etc., depending on the test used (test.use)). The following columns are always present:  
     • avg_log2FC: log2 fold-change of the average expression between the two groups. Positive values indicate that the gene is more highly expressed in the first group  
     • pct.1: The percentage of cells where the gene is detected in the first group  
     • pct.2: The percentage of cells where the gene is detected in the second group  
@@ -188,9 +196,14 @@ extract_list_FM = function(list_seurat, drug_choice){
 <br>
 
 <div class = "beige">
+
 Chosen parameters :   
 - logfc.threshold = 0.15    
 - statistical test = wilcoxon rank sum test  
+- pvalue adjusted (bonferonni) threshold = 0.05  
+https://data.library.virginia.edu/the-wilcoxon-rank-sum-test/  
+https://www.statisticssolutions.com/bonferroni-correction/  
+
 </div>
 
 
@@ -199,7 +212,7 @@ Chosen parameters :
 
 
 
-# Extract list of genes
+# Extract list of genes for each conditions combinations (CTRL vs DRUG)
 
 <br>
 
@@ -214,6 +227,7 @@ drugs_3 = c("CTRL", "AOA")
 
 <br>
 
+
 **Call the function**
 ```{r}
 
@@ -224,6 +238,7 @@ genes_tab3 = extract_list_FM(list_seurat_obj, drugs_3)
 ```
 
 <br>
+
 
 **Extract list of genes**
 ```{r}
@@ -238,12 +253,13 @@ cat("Number of genes for", drugs_1, length(genes_list1), "genes \n",
 
 ```
 
+
 <br>
 
-**Save outputs**
+**Save outputs**  
 ```{r}
 
-
+# Genes names as list 
 write.csv2(x = genes_list1, row.names = FALSE,
            file = paste0(directory_output, paste(drugs_1, collapse = "-"), "_list_", 
                          length(genes_list1), "_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
@@ -254,6 +270,11 @@ write.csv2(x = genes_list3, row.names = FALSE,
            file = paste0(directory_output, paste(drugs_3, collapse = "-"), "_list_", 
                          length(genes_list3), "_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
 
+```
+
+```{r}
+
+# Genes names and FindMarkers information as a table
 saveRDS(genes_tab1, file = paste0(directory_output, paste(drugs_1, collapse = "-"),
                                   "_list_", length(genes_list1), 
                                   "_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
@@ -267,6 +288,12 @@ saveRDS(genes_tab3, file = paste0(directory_output, paste(drugs_3, collapse = "-
 ```
 
 
+
+<br><br><br>
+
+
+
+****
 
 ```{r, Rsession}
 

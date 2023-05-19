@@ -1,11 +1,11 @@
 ---
-title: "EpiGIFT_Seurat : Investigation on List of Genes"
+title: "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat"
 author: "Laëtitia Racine"
 date: "2023-02-15"
 subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
-    code_folding: "show"
+    code_folding: "hide"
     toc: true
     toc_float: false
     theme: journal
@@ -42,13 +42,18 @@ library(kableExtra)
 start_time = Sys.time()
 directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
 directory_data = paste0(directory, "data/")
+current_date = format(Sys.time(), "%Y%m%d")
 dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/"))
-directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/")
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/", current_date))
+directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/", current_date, "/")
 
 ```
 
 
+***
+
 <br><br><br>
+
 
 
 # Overview
@@ -56,16 +61,25 @@ directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationG
 <div class = "beige">
 We want to assess if the EpiGIFT method (with the **teta path**) to extract significant genes in terms of expression between two conditions is accurate. To do so, we will compare the gene list obtained with EpiGIFT with the ones we extract with the traditional method using the Seurat Package. 
 </div>
- 
- The data we use are part of a big dataset of 10XscRNAseq together with CITEseq from 10 conditions. Here, we only use the cells from two conditions : CTRL and DON. The whole dataset was already analyzed using the standard Seurat method.  
+
+<br>
+
+The data we use are part of a big dataset of 10XscRNAseq together with CITEseq from 10 conditions. Here, we only use the cells from two conditions : CTRL and DON. The whole dataset was already analyzed using the standard Seurat method.  
+
+<br>
+
+*This document gathers all the thoughts and investigations to select the optimal list of genes for our study. To go to the essential conclusions, read only the colored subsections.*
 
 
 <br><br><br>
 
+
  
 # Understand Seurat Package functions 
 
-The Seurat package provide very useful vignettes with tutorial to handle the dataset.
+<br>
+
+The Seurat package provide very useful vignettes with tutorial to handle the dataset.  
 https://satijalab.org/seurat/articles/pbmc3k_tutorial.html  
 https://satijalab.org/seurat/articles/merge_vignette.html  
 In the standard workflow, scRNAseq dataset processing is divided in multiple steps :   
@@ -96,13 +110,13 @@ This is the workflow we want to follow.
    
  <br>
  
-The data we used were already filtered for the biggest analysis. Two filters were applied on cells (keep only cells with 1000 to 6500 genes detected and keep only cells with less than 25% of mRNA and more than 5% of rRNA) and two filters were applied on genes (remove mitochondrial genes and remove genes detected in less than 3 cells). Moreover, the entirety of the dataset was analyzed with the workflow so the search for optimal parameters was already done. Hence, we will keep the dimensions 0 to 40 for the linear reduction and work with resolution 0.06 with SLM algorithm for clustering and UMAP.
+The data we used were already filtered for the biggest analysis. Two filters were applied on cells (keep only cells with 1000 to 6500 genes detected and keep only cells with less than 25% of mRNA and more than 5% of rRNA) and two filters were applied on genes (remove mitochondrial genes and remove genes detected in less than 3 cells). Moreover, the entirety of the dataset was analyzed with the workflow so the search for optimal parameters was already done. Hence, we will keep the dimensions 0 to 40 for the linear reduction and work with resolution 0.06 with *SLM algorithm* for clustering and UMAP.
  
  <br>
 
 So, here are the data we are working with :    
 (cf. Git_Differentiation_Metabolism, output of the scRNAseq_CITEseq_R_NormalizeData.R script before the SCT normalization)  
-```{r}
+```{r, results="hold"}
 
 list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
 list_seurat_obj = list_seurat_obj[c("CTRL", "DON")]
@@ -115,7 +129,7 @@ list_seurat_obj[["DON"]]
 <br>
  
 <div class = "orange">
-To come back to our initial objective (**extract a list of significant genes to compare with EpiGIFT one**), two steps of the workflow can be interesting for u because we are looking for list of genes : the *variable features* step and the *finding cluster biomarkers* step. So, we will focus on those two and try to really understand what is behind each function.   
+To come back to our initial objective (**extract a list of significant genes to compare with EpiGIFT one**), two steps of the workflow can be interesting for us because we are looking for list of genes : the *variable features* step (during the SCT transformation or with SelectIntegrationFeatures after merging) and the *finding cluster biomarkers* step. So, we will focus on those two and try to really understand what is behind each function.   
 </div>
 
 
@@ -124,7 +138,7 @@ To come back to our initial objective (**extract a list of significant genes to 
 
 
 
- ## Investigation : how are chosen the variable features of individual conditions ?
+## Investigation : how are chosen the variable features of individual conditions in SCTransform ?
  
 <br>
 
@@ -137,7 +151,7 @@ https://rdrr.io/cran/sctransform/man/vst.html
 DOI:10.1177/0954406216641455     
 https://satijalab.org/seurat/reference/selectintegrationfeatures        
 https://htmlpreview.github.io/?https://github.com/satijalab/sctransform/blob/supp_html/supplement/variance_stabilizing_transformation.html      
-The function has many important parameters to be aware of : 
+The function has many important parameters to be aware of :   
 - variable.features.n => Use this many features as variable features after ranking by residual variance; default is 3000. Only applied if residual.features is not set.      
 - variable.features.rv.th => Instead of setting a fixed number of variable features, use this residual variance cutoff; this is only used when variable.features.n is set to NULL; default is 1.3. Only applied if residual.features is not set.    
 - residual.features => Genes to calculate residual features for; default is NULL (all genes). If specified, will be set to VariableFeatures of the returned object.    
@@ -182,8 +196,10 @@ for (i in 1:length(threshold)) {
     
 }
 
-saveRDS(object = list_genes_threshold, file = paste0(directory_output, "ctrl_don_variablegenes_thresholds.rds"))
-saveRDS(object = list_seurat_threshold, file = paste0(directory_output, "ctrl_don_seuratobj_thresholds.rds"))
+saveRDS(object = list_genes_threshold, 
+        file = paste0(directory_output, "ctrl_don_variablegenes_thresholds.rds"))
+saveRDS(object = list_seurat_threshold, 
+        file = paste0(directory_output, "ctrl_don_seuratobj_thresholds.rds"))
 
 ```
 
@@ -191,15 +207,15 @@ saveRDS(object = list_seurat_threshold, file = paste0(directory_output, "ctrl_do
 
 list_seurat_obj_th = list_seurat_threshold$'1.3'
 
-```
-
-```{r, fig.width = 14, fig.height = 6}
-
 tab_features_ctrl = list_seurat_obj_th$CTRL@assays$SCT@SCTModel.list$model1@feature.attributes
 tab_features_don = list_seurat_obj_th$DON@assays$SCT@SCTModel.list$model1@feature.attributes
 
+```
+
+CTRL cells - genes distribution of residual variance (y = number of genes in the bin)
+```{r, fig.width = 14, fig.height = 6}
+
 summary(tab_features_ctrl$residual_variance)
-summary(tab_features_don$residual_variance)
 
 ctrl1 = ggplot(tab_features_ctrl, aes(x=residual_variance)) +
   geom_histogram(binwidth = 0.01) +
@@ -215,6 +231,13 @@ ctrl3 = ggplot(tab_features_ctrl, aes(x=residual_variance)) +
   annotate("text", x=25, y=1.5, label= "bin = 5")
 
 ctrl1 | ctrl2 | ctrl3
+
+```
+
+DON cells - genes distribution of residual variance (y = number of genes in the bin)
+```{r, fig.width = 14, fig.height = 6}
+
+summary(tab_features_don$residual_variance)
 
 don1 = ggplot(tab_features_don, aes(x=residual_variance)) +
   geom_histogram(binwidth = 0.01) +
@@ -235,7 +258,8 @@ don1 | don2 | don3
 
 ```{r}
 
-thresh_tab = data.frame(nbgenes = lengths(list_genes_threshold)) %>%
+thresh_tab = data.frame(
+  nbgenes = lengths(list_genes_threshold)) %>%
   tibble::rownames_to_column("cond") %>%
   tidyr::separate(col = "cond", into = c("condition", "threshold_variance"), 
                   sep = "_", remove =TRUE)
@@ -244,10 +268,12 @@ thresh_tab
 
 ```
 
+<br>
 
 For each condition, the majority of the genes has small value of residual variance (see 3rd Qu. values). We want to keep only those that are the most variable between cells, ie. those with the highest residual variance. We tried to extract the genes with different threshold values for the residual variance and count the number of genes conserved for CTRL and DON.  
+
 <div class = "red">
-Here, **1.3 seems to be a good value for the residual variance threshold** but we can be tighter also.   
+Here, **1.3 seems to be a good value for the residual variance threshold** but we can be tighter also.  
 </div>
 
 <br>
@@ -321,10 +347,7 @@ cat("For CTRL, we set variable.features.n to 429 to see if we extract the same l
     "DON variable features : ", length(n_features_don), "\n",
     "Difference between DON variable features (variable.features.rv.th = 1.3)", "\n",
     "and DON variable features (variable.features.n = 362) : ", length(inter_n_th_features_don), "\n",
-    "Genes selected with the variable.features.n are the one with the higher residual variance.", "\n",
-    "Indeed, we found the exact same list for CTRL and DON when we use variable.features.rv.th ", "\n",
-    "and variable.features.n with the same number. So we can use the two functions depending ", "\n",
-    "what we want (a fixed number or not). \n")
+    "Genes selected with the variable.features.n are the one with the higher residual variance. Indeed, we found the exact same list for CTRL and DON when we use variable.features.rv.th and variable.features.n with the same number. So we can use the two functions depending what we want (a fixed number or not). \n")
 
 tab_features_ctrl_gene = list_seurat_obj_th$CTRL@assays$SCT@SCTModel.list$model1@feature.attributes %>%
   dplyr::select(residual_variance) %>%
@@ -332,7 +355,7 @@ tab_features_ctrl_gene = list_seurat_obj_th$CTRL@assays$SCT@SCTModel.list$model1
   rownames_to_column("gene")
 tab_features_ctrl_gene_th = tab_features_ctrl_gene[1:429,]
 res_features_ctrl = tab_features_ctrl_gene_th$gene
-setdiff(res_features_ctrl, th_features_ctrl)
+# setdiff(res_features_ctrl, th_features_ctrl)
 
 tab_features_don_gene = list_seurat_obj_th$DON@assays$SCT@SCTModel.list$model1@feature.attributes %>%
   dplyr::select(residual_variance) %>%
@@ -340,7 +363,7 @@ tab_features_don_gene = list_seurat_obj_th$DON@assays$SCT@SCTModel.list$model1@f
   rownames_to_column("gene")
 tab_features_don_gene_th = tab_features_don_gene[1:362,]
 res_features_don = tab_features_don_gene_th$gene
-setdiff(res_features_don, th_features_don)
+# setdiff(res_features_don, th_features_don)
 
 cat("The genes of the list are the genes with the highest residual variance.")
 
@@ -376,22 +399,24 @@ list_diff = setdiff(comp_gene, th_features_ctrl)
 rest_gene = tab_features_ctrl_gene[430:600,]$gene
 setdiff(list_diff, rest_gene)
 
-cat("We ask for 600 genes in variable.features.n while we had only 429 selected with threshold 1,3.", "\n",
+cat("We ask for 600 genes in variable.features.n while we had only 429 selected with threshold 1,3.",
     "First, we check that we have all the 429 genes in the list of 600 : function setdiff() => ", length(setdiff(th_features_ctrl, comp_gene)), "\n", "Then, we check that the others 171 genes are the ones with the highest residual variance in the tab after the firsts 429 : function setdiff() => ", length(setdiff(list_diff, rest_gene)))
 
 ```
 
 <div class = "red">
-**variable.features.n and variable.features.rv.th work the same manner : the residual variance is calculated for each gene and the list is order in descending order. Then, the n genes with the highest residual variance are selected (for variable.features.n) or genes with residual variance higher than the threshold value indicated (for variable.features.rv.th). **  
+**variable.features.n and variable.features.rv.th work the same manner : the residual variance is calculated for each gene and the list is ordered in descending order. Then, the n genes with the highest residual variance are selected (for variable.features.n) or genes with residual variance higher than the threshold value indicated (for variable.features.rv.th). **  
 </div>
 
 
 
-<br>
+<br><br><br>
 
 
 
 ## Investigation : Select Variable Features after merging, what difference between the two functions ?
+
+<br>
 
 For downstream analysis, I need to work with a merged object. When we use the merge function, we lose var.features in the SCT assay so we need to "extract" them again. We have two possibilities for that : some people advice the use of SelectIntegrationFeatures while others are taking the list of genes from the scale.data slot. We want to compare both methods and understand the differences.  
 We use here the list_seurat_obj_th that we calculated before with the SCT normalization with threshold 1.3 on variance (429 variable genes for CTRL and 362 for DON) and we merge the two conditions.    
@@ -412,18 +437,26 @@ merge_after_norm = merge(x = list_seurat_obj_th[["CTRL"]],
 
 ```
 
-Then, we try the two possible options to extract the new list of variable genes for the merge object and we compare them.  
+Then, we try the two possible options to extract the new list of variable genes for the merge object and we compare them.    
 
+<br>
+
+*Option 1 : use scale.data slot genes*
 ```{r}
 
-# Option 1 : use scale.data slot genes
 feature_scale_merge = rownames(merge_after_norm[["SCT"]]@scale.data)
 setdiff(th_union_ctrl_don, feature_scale_merge) 
 cat("In the scale.data slot, we have a list of ", 
     length(feature_scale_merge), "variable genes.", "\n",
     "This list corresponds to the union of each variable features list of the conditions we merged. \n")
 
-# Option 2 : use SelectIntegrationFeatures
+```
+
+<br>
+
+*Option 2 : use SelectIntegrationFeatures*
+```{r}
+
 features_integ_merge = SelectIntegrationFeatures(object.list = list_seurat_obj_th, nfeatures = 454)
 setdiff(th_union_ctrl_don, features_integ_merge)
 features_integ_merge_bis = SelectIntegrationFeatures(object.list = list_seurat_obj_th, nfeatures = 800)
@@ -440,7 +473,7 @@ setdiff(features_integ_merge_ter, tab[1:100,]$gene)
 ```
 
 <div class = "red">
-If we indicate the same number of features in the SelectIntegrationFeatures as in the scale.data slot, we obtain the same list. Even if we put a higher number in the nfeatures parameter, we can't have more genes than what is in the list (union of variable features of each condition). If we put a smaller number, it picks some genes from the union list. I think thoses genes are randomly chosen in the union list.
+If we indicate the same number of features in the SelectIntegrationFeatures as in the scale.data slot (union of variables features of individual codnitions), we obtain the same list. Even if we put a higher number in the nfeatures parameter, we can't have more genes than what is in the list (union of variable features of each condition). If we put a smaller number, it picks some genes from the union list. I think those genes are randomly chosen in the union list.
 </div>
 
 <br>
@@ -550,7 +583,7 @@ cat("When we perform the merging step after the SCTransform normalization, but r
 </div>
 
 
-<br>
+<br><br><br>
 
 
 
@@ -558,7 +591,11 @@ cat("When we perform the merging step after the SCTransform normalization, but r
 
 <br>
 
-Based on the documentation of the FindMarkers function, the list of genes extracted seems to be more close to what we are looking for : "Finds markers (differentially expressed genes) for identity classes". Indeed, we want some genes differentially expressed between CTRL and DON. So, we will dig in the function parameters to understand how it works.    
+<div class = "red">
+Based on the documentation of the FindMarkers function, the list of genes extracted seems to be more close to what we are looking for : "Finds markers (differentially expressed genes) for identity classes". Indeed, we want some genes differentially expressed between CTRL and DON. 
+</div>  
+  
+So, we will dig in the function parameters to understand how it works.    
 https://satijalab.org/seurat/reference/findmarkers  
 https://satijalab.org/seurat/articles/sctransform_v2_vignette.html    
   
@@ -652,8 +689,10 @@ setdiff(list_FM_thresholds$'0.5', list_FM_thresholds$'0.45')
 setdiff(list_FM_thresholds$'0.45', list_FM_thresholds$'0.4')
 cat("The small lists with high threshold are included in the bigger list with low threshold.")
 
-saveRDS(list_FM_gene_thresholds, file = paste0(directory_output, "list_genes_FM_different_thresholds.rds"))
-saveRDS(list_FM_thresholds, file = paste0(directory_output, "list_FM_different_thresholds.rds"))
+saveRDS(list_FM_gene_thresholds, 
+        file = paste0(directory_output, "list_genes_FM_different_thresholds.rds"))
+saveRDS(list_FM_thresholds, 
+        file = paste0(directory_output, "list_FM_different_thresholds.rds"))
 
 ```
 
@@ -698,8 +737,10 @@ for (i in 1:length(list_FM_tests)) {
 
 names(list_FM_tests_filter) = names_list
 
-saveRDS(list_FM_tests, file = paste0(directory_output, "list_genes_FM_th0.15_different_tests.rds"))
-saveRDS(list_FM_tests_filter, file = paste0(directory_output, "list_genes_FM_th0.15_different_tests_filterpval.rds"))
+saveRDS(list_FM_tests, 
+        file = paste0(directory_output, "list_genes_FM_th0.15_different_tests.rds"))
+saveRDS(list_FM_tests_filter, 
+        file = paste0(directory_output, "list_genes_FM_th0.15_different_tests_filterpval.rds"))
 
 
 # Before filtering on pval
@@ -723,8 +764,8 @@ setdiff(wilcox, LR)
 setdiff(negbinom, poisson)
 setdiff(wilcox, negbinom)
 
-cat("Before the filter on pval, lists of genes obtained with wilcox, bimod, roc, t and LR are the equals with", length(wilcox),
-    "and list of genes obtained with negbinom and poisson are equals with", length(negbinom), "genes. \n",
+cat("Before the filter on pval, lists of genes obtained with wilcox, bimod, roc, t and LR are equals with", length(wilcox),
+    "genes and list of genes obtained with negbinom and poisson are equals with", length(negbinom), "genes. \n",
     length(setdiff(wilcox, negbinom)), "genes from small list are not retrieve in the big list.")
 
 # After filtering on pval
@@ -750,6 +791,8 @@ setdiff(wilcox_f, negbinom_f)
 
 ```
 
+<br>
+
 **How is it calculated ? Example with logfc.threshold = 0.15 and wilcoxon test**    
 Reading the source code of the function, we tried to understand how it really works.  
 https://github.com/satijalab/seurat/blob/96d07d80bc4b6513b93e9c10d8a9d57ae7016f9f/R/differential_expression.R#L176-L178    
@@ -771,6 +814,7 @@ https://satijalab.org/seurat/articles/v4_changes.html
 12) bonferonni correction is applied to calcul the p value adjusted    
     
 With this in mind, we will do it by hand for two genes and check that we obtain the same values.  
+*Values with the function*  
 ```{r, with FindMarkers, results="hold"}
 
 values_function = list_FM_tests_filter$wilcox %>% 
@@ -778,7 +822,7 @@ values_function = list_FM_tests_filter$wilcox %>%
 values_function
 
 ```
-
+*Values with manual calcul*  
 ```{r, manually, results="hold"}
 
 # Extract Matrix with cells from ident.1 = CTRL and another with cells from ident.2 = DON 
@@ -802,18 +846,22 @@ avg_log2FC = ident1_log2 - ident2_log2
 print(avg_log2FC)
 
 # Check if genes respect the threshold value
-table(abs(avg_log2FC) > 0.15)
+# table(abs(avg_log2FC) > 0.15)
 
 # Wilcoxon test on the selected genes 
 ident1_RPS27 = unlist(as.vector(ident1["RPS27",]))
 ident2_RPS27 = unlist(as.vector(ident2["RPS27",]))
-print(wilcox.test(ident1_RPS27, ident2_RPS27)$p.value)
+print(paste0("pvalue for RPS27 : ", wilcox.test(ident1_RPS27, ident2_RPS27)$p.value))
 
 ident1_RPL36 = unlist(as.vector(ident1["RPL36",]))
 ident2_RPL36 = unlist(as.vector(ident2["RPL36",]))
-print(wilcox.test(ident1_RPL36, ident2_RPL36)$p.value)
+print(paste0("pvalue for RPL36 : ", wilcox.test(ident1_RPL36, ident2_RPL36)$p.value))
 
 ```
+
+<div class = "red">
+For CTRL and DON, the FindMarkers() function with log.fc.threshold = 0.15 (default 0.25) and Wilcoxon test gives 219 significant differentially expressed genes. We know exactly how those genes are selected as we could recalculate the same pvalue by hand (see above). We decided to change the default value for log.fc.threshold because we had only 62 significant genes  with 0.25 and it seems really low. The Wilcoxon test is the default one of the function but we could easily decide to change for t-test for example as we have quite the same final list of genes (two more only).  
+</div> 
 
 
 
@@ -821,7 +869,9 @@ print(wilcox.test(ident1_RPL36, ident2_RPL36)$p.value)
 
 
 
-# Extract list of genes from Seurat to test 
+# Extract list of genes to do some comparison tests with EpiGIFT
+
+<br>
 
 ## List1 - variable feature with threshold on gene number = 365 (close number of what Giota found with EpiGift)
 
@@ -871,12 +921,18 @@ tab_features = test_merge@assays$SCT@SCTModel.list$model1@feature.attributes %>%
   dplyr::arrange(desc(residual_variance)) %>%
   rownames_to_column("gene")
 
-saveRDS(object = ctrl_ind_varfeatures, file = paste0(directory_output, "list_365_genes_ctrl_ind.rds"))
-saveRDS(object = don_ind_varfeatures, file = paste0(directory_output, "list_365_genes_don_ind.rds"))
-saveRDS(object = merge_features, file = paste0(directory_output, "list_365_genes_merge.rds"))
-write.csv2(x = tab_features, file = paste0(directory_output, "tab_residualvariance_365variablegenes.csv"), row.names = FALSE)
+saveRDS(object = ctrl_ind_varfeatures, 
+        file = paste0(directory_output, "list_365_genes_ctrl_ind.rds"))
+saveRDS(object = don_ind_varfeatures, 
+        file = paste0(directory_output, "list_365_genes_don_ind.rds"))
+saveRDS(object = merge_features, 
+        file = paste0(directory_output, "list_365_genes_merge.rds"))
+write.csv2(x = tab_features, row.names = FALSE,
+           file = paste0(directory_output, "tab_residualvariance_365variablegenes.csv"))
 
 ```
+
+<br>
 
 ## List2 - variable feature with threshold on variance = 1.3
 
@@ -893,6 +949,8 @@ write.csv2(tab_features_mergetest, row.names = FALSE,
 
 ```
 
+<br>
+
 ## List3 - FindMarkers 
 
 - seurat objects of the two conditions separately
@@ -906,8 +964,12 @@ Extract the good one from above code : threshold 0.15 and Wilcoxon test
 ```{r}
 
 genes_diff = list_FM_tests_filter["wilcox"]
-saveRDS(genes_diff, file = paste0(directory_output, "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds")) 
-write.csv2(genes_diff$gene, file = paste0(directory_output, "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
+saveRDS(genes_diff, 
+        file = paste0(directory_output, 
+                      "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds")) 
+write.csv2(genes_diff$gene, 
+           file = paste0(directory_output, 
+                         "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.csv"))
 
 ```
 
@@ -915,16 +977,61 @@ write.csv2(genes_diff$gene, file = paste0(directory_output, "list_219_genes_Find
 
 <br><br><br>
 
+
+# Conclusion 
+
+<br>
+
 <div class = "orange">
 
-We have multiple list of genes that we can use to compare with EpiGift ones :   
-- variable list with threshold 365 on number of features  
-- variable list with threshold 1.3 on variance   
-- find markers list with logfc threshold 0.15 and wilcox test  
-I think the more accurate list of genes for us is the one we obtain with FindMarkers because it's a real comparison between conditions and not only inside each condition.  
-We also have an object list_FM_tests.rds with multiple FindMarkers list depending the test used.  
+This script creates lots of outputs. Here is a recap :  
+    
+*from variable features investigation*    
+- ctrl_don_variablegenes_thresholds.rds  
+- ctrl_don_seuratobj_thresholds.rds  
+The first one is a list of genes that we can find in the variable features slot of the seurat objects.    
+The second one is a list of the seurat objects, normalized with SCT with different thresholds.    
+Each element of the lists corresponds to a certain threshold ("1.3", "2", "2.5", "3", "4", "4.5", "5") of variable.features.rv.th in SCTransform function.      
+  
+*from FindMarkers investigation*     
+- merge_fm.rds  
+Seurat object of merged conditions realized after the SCTransform (RunPCA, RunUMAP, FindNeighbors, FindClusters, PrepSCTFindMarkers done).   
+- list_genes_FM_different_thresholds.rds
+- list_FM_different_thresholds.rds
+The first one is a list of genes that we can find with FindMarkers function depending the threshold.
+The second one is a list of the seurat objects after appplying FindMarkers function.    
+Each element of the lists corresponds to a certain threshold ("0.05", "0.1", "0.15", "0.2", "0.25", "0.3", "0.35", "0.4", "0.45", "0.5") of logfc.threshold in FindMarkers function.        
+- list_genes_FM_th0.15_different_tests.rds
+- list_genes_FM_th0.15_different_tests_filterpval.rds
+The first one is a list of seurat objects with logfc.threshold=0.15 depending the statistical test used.    
+The second one is the same but we keep only the genes that passed threshold 0.05 on pvalue adjusted.     
+Each element of the lists corresponds to a different statistical test ("wilcox", "bimod", "roc", "t", "negbinom", "poisson", "LR") in test.use parameter of FindMarkers function.      
+  
+*list of genes that we can use to compare with EpiGift ones*   
+**Variable list with threshold 365 on number of features**    
+- list_365_genes_ctrl_ind.rds  
+- list_365_genes_don_ind.rds  
+- list_365_genes_merge.rds  
+- tab_residualvariance_365variablegenes.csv  
+**Variable list with threshold 1.3 on variance**    
+- list_394_genes_variablefeatures_th1.3.csv  
+- tab_residualvariance_394variablegenes_th1.3.csv  
+**Find markers list with logfc threshold 0.15 and wilcox test**    
+- list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds (complete table)   
+- list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.csv (only gene names)   
+  
+<br>
+
+I think the more accurate list of genes for us is the one we obtained with FindMarkers because it's a real comparison between conditions and not only inside each condition. We also have an object list_FM_tests.rds with multiple FindMarkers list depending the test used if we change our mind. 
+
 </div>
 
+
+
+<br><br><br>
+
+
+***
 
 ```{r, Rsession}
 

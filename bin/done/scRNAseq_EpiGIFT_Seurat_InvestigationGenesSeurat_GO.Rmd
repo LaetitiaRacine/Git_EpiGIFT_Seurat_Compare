@@ -43,7 +43,6 @@ start_time = Sys.time()
 source(file = paste0(directory, "bin/Epi_FM_functions_constants.R"))
 
 # Extract info from STRING database
-
 string_db <- STRINGdb$new(version="11.5", species=9606, score_threshold=200, input_directory="")
 
 ```
@@ -52,7 +51,7 @@ string_db <- STRINGdb$new(version="11.5", species=9606, score_threshold=200, inp
  
 # Loading initial data
 
-dir = paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/")
+dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/"))
 genes_FM_list = readRDS(paste0(dir, "/", "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
 genes_FM_list = genes_FM_list[["wilcox"]]
 genes_fixed = readRDS(paste0(dir, "/", "list_365_genes_merge.rds"))
@@ -166,6 +165,21 @@ GO_clusterProfiler_fun = function(tab_corr, list_gene, gene_universe, title_plot
 
 ```
 
+***
+
+<br><br><br>
+
+
+
+# Overview
+
+<br>
+
+We aim at analyzing the three possible list of genes that we extracted in **scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat.Rmd** to compare with EpiGIFT list.  
+For each list, we perform Gene Ontology and String Analysis.  
+  
+
+<br><br><br>
 
 
 
@@ -260,7 +274,7 @@ cat("We have a list of", length(genes_fixed), "genes.")
 
 ```
 
-# Gene Ontology
+## Gene Ontology
 
 ```{r, fig.height = 14, fig.width = 14}
 
@@ -399,6 +413,13 @@ out_hits %>%
   scroll_box(height = "250px", width = "100%")
 
 ```
+
+
+
+<br><br><br>
+
+
+***
 
 
 ```{r, Rsession}
