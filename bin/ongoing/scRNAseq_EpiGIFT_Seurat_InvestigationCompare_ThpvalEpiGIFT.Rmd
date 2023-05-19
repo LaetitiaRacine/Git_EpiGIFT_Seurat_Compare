@@ -108,6 +108,8 @@ plot1 | plot2 | plot3
 
 # Conclusion 
 
+We decide 40 is better : how ?
+
 <br>
 
 

@@ -5,7 +5,7 @@ date: "2023-03-20"
 subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
-    code_folding: "show"
+    code_folding: "hide"
     toc: true
     toc_float: false
     theme: journal

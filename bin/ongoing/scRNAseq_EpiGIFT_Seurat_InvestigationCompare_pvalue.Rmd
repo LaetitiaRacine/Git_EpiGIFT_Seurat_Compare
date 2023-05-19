@@ -191,10 +191,16 @@ ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
 
 # pvalue distribution of FindMarkers against pvalue distribution of EpiGIFT
 
+FM : extract pvalues for all the genes, even those that didn't pass the logFc.threshold
 ```{r}
 
-# Create a table with name of the gene, list_category, pvalue in FM (put at 1 if not present), pvalue in EG
-# Draw one graph for each SNP
+```
+
+```{r}
+
+# Create a table with name of the gene, list_category, pvalue in FM, pvalue in EG
+# gene list_category (common, onlyEG, onlyFM) pvalueEG pvalueFM
+# Draw one graph for each SNP : pvalueEG on y axis, pvalueFM on x axis and different colors for list_category
 
 
 ```
