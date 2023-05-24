@@ -307,16 +307,23 @@ saveRDS(tab_all_genes, "/shared/ifbstor1/projects/strength_field_u/Epigenetics/C
 <br>
 
 **Step3 : Graphical representation with pSNP5 on y axis and pvalueFM on x axis**  
-```{r}
+```{r message=FALSE, warning=FALSE}
 
 # Create a table with name of the gene, list_category, pvalue in FM, pvalue in EG
 # gene list_category (common, onlyEG, onlyFM) pvalueEG pvalueFM
 # Draw one graph for each SNP : pvalueEG on y axis, pvalueFM on x axis and different colors for list_category
 
-ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pSNP5, fill=list_category)) +
+ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pSNP5, fill=list_category, col = list_category)) +
   geom_point() +
   scale_fill_manual(values = color_code, limits = force)
 
+
+# Zoom in
+ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pSNP5, fill=list_category, col = list_category)) +
+  geom_point() +
+  scale_fill_manual(values = color_code, limits = force) +
+  xlim(0, 0.15) +
+  ylim(0,230)
 ```
 
 
