@@ -30,6 +30,7 @@ library(Seurat)
 library(stringr)
 library(ggplot2)
 library(ggVennDiagram)
+library(kableExtra)
 
 ```
 
@@ -249,6 +250,11 @@ NB : for FM method, a good pvalue is really close to 0.
 # Genes only EG
 dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/"))
 genes_EG_FMpval = readRDS(paste0(dir, "/", "EG_FindMarkerscalcul_CTRLDON.rds"))
+
+# Giota's direcrtory
+genes_EG_FMpval = readRDS("/shared/ifbstor1/projects/strength_field_u/Epigenetics/CTRL_DON/Git/exp/EG_FindMarkerscalcul_CTRLDON.rds")
+
+
 genes_EG_FMpval = genes_EG_FMpval %>% 
   dplyr::select(gene, p_val_adj) %>%
   dplyr::mutate(list_category = case_when(gene %in% common_list ~ "common_FM_EG",
@@ -267,10 +273,10 @@ tab_all_genes %>%
   kable() %>%
   kable_styling()
 
+
 # save intermediate table 
 
 saveRDS(tab_all_genes, paste0(directory_output, "tab_all_genes_pvalueFM.rds"))
-
 ```
 
 <br>
@@ -278,29 +284,36 @@ saveRDS(tab_all_genes, paste0(directory_output, "tab_all_genes_pvalueFM.rds"))
 **Step2 : Add EG pvalue for all the genes**  
 ```{r}
 
-# Load EG pvalue table
-
+# Load EG pSNP5 table
+pval5 <- as.data.frame(fread("/shared/ifbstor1/projects/strength_field_u/Epigenetics/CTRL_DON/BinFullData/pval5.csv"))
 
 # Add information in the global table 
+genes_pSNP5 <- pval5[pval5[,1] %in% tab_all_genes$gene,]
+tab_all_genes$pSNP5 <- genes_pSNP5[match(tab_all_genes$gene, genes_pSNP5[,1]),2]
+
 
 # Display the result
 tab_all_genes %>%
   kable() %>%
   kable_styling()
 
+
+# save intermediate table 
+
+saveRDS(tab_all_genes, "/shared/ifbstor1/projects/strength_field_u/Epigenetics/CTRL_DON/Git/exp/tab_all_genes_pvalues.rds")
 ```
 
 
 <br>
 
-**Step3 : Graphical representation with pvalueEG on y axis and pvalueFM on x axis**  
+**Step3 : Graphical representation with pSNP5 on y axis and pvalueFM on x axis**  
 ```{r}
 
 # Create a table with name of the gene, list_category, pvalue in FM, pvalue in EG
 # gene list_category (common, onlyEG, onlyFM) pvalueEG pvalueFM
 # Draw one graph for each SNP : pvalueEG on y axis, pvalueFM on x axis and different colors for list_category
 
-ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pvalueEG, fill=list_category)) +
+ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pSNP5, fill=list_category)) +
   geom_point() +
   scale_fill_manual(values = color_code, limits = force)
 
