@@ -78,6 +78,11 @@ genes_FM_list = readRDS(paste0(dir, "/", "list_219_genes_FindMarkers_th0.15_wilc
 genes_FM_list = genes_FM_list[["wilcox"]]
 
 dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/"))
+
+# Giota's direcrtory
+# genes_FM_list <- readRDS("/shared/ifbstor1/projects/strength_field_u/Epigenetics/FindMarkers_th0.15_pval0.05_genes.rds")
+# genes_EG_list <- read.csv("/shared/ifbstor1/projects/strength_field_u/Epigenetics/list_174genes_pSNP5gt40.csv")
+
 common_list = readRDS(paste0(dir, "/", "list_genes_CTRL-DON_commonEGFM.rds"))
 only_FM_list = readRDS(paste0(dir, "/", "list_genes_CTRL-DON_onlyFM.rds"))
 only_EG_list = readRDS(paste0(dir, "/", "list_genes_CTRL-DON_onlyEG.rds"))
@@ -180,13 +185,53 @@ ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
 
 
 
-# pvalue distribution of EpiGIFT
+# pSNP5 distribution of EpiGIFT
+
+```{r}
+pval5 <- as.data.frame(fread("/shared/ifbstor1/projects/strength_field_u/Epigenetics/CTRL_DON/BinFullData/pval5.csv"))
+
+genes_EG_list$pSNP5 <- pval5[pval5[,1] %in% genes_EG_list$GeneName,2] # logical vector that corresponds to the vector on the left
+genesFMpSNP5 <- pval5[pval5[,1] %in% genes_FM_list$gene,]
+genes_FM_list$pSNP5 <- genesFMpSNP5[match(genes_FM_list$gene, genesFMpSNP5[,1]),2]
+```
 
 ```{r}
 
+# Reorder rows by ascending order of pSNP5
+genes_EG_list = genes_EG_list %>% dplyr::arrange(pSNP5)
+genes_order = genes_EG_list$GeneName
+genes_EG_list$GeneName = factor(genes_EG_list$GeneName , levels = genes_order)
+
 ```
 
+```{r, fig.height = 6, fig.width = 20}
 
+# Represent the data
+ggplot(data = genes_EG_list, aes(x=GeneName, y=pSNP5, col=list_category)) +
+  geom_point() +
+  scale_color_manual(values = color_code) +
+  xlab(label = "Gene Name") +
+  ylab(label = "pSNP5") +
+  ggtitle(label = "Ordered pSNP5 distribution for EG list of genes") +
+  theme(axis.text.x = element_text(angle = 90, size = 6))
+
+```
+
+```{r, fig.height = 6, fig.width = 20}
+
+# Zoom in
+ggplot(data = genes_EG_list, aes(x=GeneName, y=pSNP5, col=list_category)) +
+  geom_point() +
+  scale_color_manual(values = color_code) +
+  xlab(label = "Gene Name") +
+  ylab(label = "pSNP5") +
+  coord_cartesian(ylim= c(0, 230)) +
+  scale_y_continuous(breaks=seq(0,0.00025, 0.00001)) +
+  ggtitle(label = "Ordered pSNP5 distribution for EG list of genes",
+          subtitle = "Zoom on values between 0 and around 200") +
+  theme(axis.text.x = element_text(angle = 90, size = 6))
+
+```
 
 <br><br><br>
 
