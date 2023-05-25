@@ -235,7 +235,9 @@ FindMarkers_FC_wilcox = function(list_seurat, drugs_choice, list_genes) {
   tab_wilcox = tab_wilcox %>% 
     tibble::rownames_to_column("gene") %>%
     # manual bonferroni correction (multiply the pvalue by the total number of comparison (all genes of the seurat obj))
-    dplyr::mutate(p_val_adj = tab_wilcox$p_val * nrow(merge_obj)) 
+    # set the biggest value at 1 (same as if we had used p.adjust(tab_wilcox$p_val, "bonferroni", n=nrow(merge_obj)))
+    dplyr::mutate(p_val_adj = tab_wilcox$p_val * nrow(merge_obj)) %>%
+    dplyr::mutate(p_val_adj = ifelse(p_val_adj<1, p_val_adj, 1))
   
   # Join table with avg_log2FC
   final_tab = left_join(tab_wilcox, df_avg_log2FC, by = "gene")
@@ -270,6 +272,8 @@ list_seurat_obj = lapply(list_seurat_obj, function(x) {
                 n_genes = NULL)
   })
 
+saveRDS(list_seurat_obj, paste0(directory_output, "list_seurat_obj_epi_sct.rds"))
+
 ```
 
 ```{r, Call function FM manual}
@@ -286,9 +290,12 @@ EG_FindMarkerscalcul_CTRLDON = FindMarkers_FC_wilcox(list_seurat = list_seurat_o
 #                                                      drugs_choice = c("CTRL", "AOA"), 
 #                                                      list_genes = genes_EG_list_CTRLAOA)
 
-saveRDS(EG_FindMarkerscalcul_CTRLDON, paste0(directory_output, "EG_FindMarkerscalcul_CTRLDON.rds"))
-# saveRDS(EG_FindMarkerscalcul_CTRL2DG, paste0(directory_output, "EG_FindMarkerscalcul_CTRL2DG.rds"))
-# saveRDS(EG_FindMarkerscalcul_CTRLAOA, paste0(directory_output, "EG_FindMarkerscalcul_CTRLAOA.rds"))
+saveRDS(EG_FindMarkerscalcul_CTRLDON, 
+        paste0(directory_output, current_date, "_EG_FindMarkerscalcul_CTRLDON.rds"))
+# saveRDS(EG_FindMarkerscalcul_CTRL2DG,
+#         paste0(directory_output, current_date, "_EG_FindMarkerscalcul_CTRL2DG.rds"))
+# saveRDS(EG_FindMarkerscalcul_CTRLAOA,
+#         paste0(directory_output, current_date, "_EG_FindMarkerscalcul_CTRLAOA.rds"))
 
 ```
 
