@@ -291,11 +291,11 @@ EG_FindMarkerscalcul_CTRLDON = FindMarkers_FC_wilcox(list_seurat = list_seurat_o
 #                                                      list_genes = genes_EG_list_CTRLAOA)
 
 saveRDS(EG_FindMarkerscalcul_CTRLDON, 
-        paste0(directory_output, current_date, "_EG_FindMarkerscalcul_CTRLDON.rds"))
+        paste0(directory_output, "EG_FindMarkerscalcul_CTRLDON.rds"))
 # saveRDS(EG_FindMarkerscalcul_CTRL2DG,
-#         paste0(directory_output, current_date, "_EG_FindMarkerscalcul_CTRL2DG.rds"))
+#         paste0(directory_output, "EG_FindMarkerscalcul_CTRL2DG.rds"))
 # saveRDS(EG_FindMarkerscalcul_CTRLAOA,
-#         paste0(directory_output, current_date, "_EG_FindMarkerscalcul_CTRLAOA.rds"))
+#         paste0(directory_output, "EG_FindMarkerscalcul_CTRLAOA.rds"))
 
 ```
 
