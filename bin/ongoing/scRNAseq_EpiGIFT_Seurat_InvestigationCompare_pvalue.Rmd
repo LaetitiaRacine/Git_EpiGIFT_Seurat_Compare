@@ -12,7 +12,8 @@ output:
 ---
 
 <style>
-body {text-align: justify}
+body {text-align: justify}  
+div.red {background-color:#FFA996; border-radius: 5px; padding: 8px;}
 </style>
 
 ```{r, Setup, include=FALSE}
@@ -42,14 +43,15 @@ directory_data = paste0(directory, "data/")
 start_time = Sys.time()
 current_date = format(Sys.time(), "%Y%m%d")
 dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_pvalue/"))
-dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_pvalue/", current_date))
-directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_pvalue/", current_date, "/")
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_pvalue/", 
+                         current_date))
+directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_pvalue/", 
+                          current_date, "/")
 
 # Load external script with functions and constants
 source(file = paste0(directory, "bin/", "Epi_FM_functions_constants.R"))
 
 # Define a color code for list category 
-
 color_code = c(
   "common_FM_EG" = "#6922FB",
   "only_EG" = "#F73131",
@@ -58,35 +60,38 @@ color_code = c(
 
 ```
 
-
+ ****
+ 
+ 
 <br><br><br>
+
 
 
 # Script's objective and reminder of previous analysis
 
-To write = see if pvalue of common gene are smaller than one of non common genes
+This code aims at visualizing the pvalue distribution (pvalue calculated with FindMarkers method (=Wilcoxon statistical test) confronted to pvalue calculated with EpiGIFT method)   
+if pvalue of common gene are smaller than one of non common genes
 
-Abbreviations : 
-- FM = FindMarkers() function, classical Seurat analysis based on fold change of average  
+Abbreviations :   
+- FM = FindMarkers() function, classical Seurat analysis based on fold change of average      
 - EG = EpiGIFT method, new analysis based on each individual  
   
 ```{r, Load Input data}
 
 genes_EG_list = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")
 
-dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/"))
-genes_FM_list = readRDS(paste0(dir, "/", "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
+dir1 = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/"))
+genes_FM_list = readRDS(paste0(dir1, "/", "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
 genes_FM_list = genes_FM_list[["wilcox"]]
-
-dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/"))
 
 # Giota's direcrtory
 # genes_FM_list <- readRDS("/shared/ifbstor1/projects/strength_field_u/Epigenetics/FindMarkers_th0.15_pval0.05_genes.rds")
 # genes_EG_list <- read.csv("/shared/ifbstor1/projects/strength_field_u/Epigenetics/list_174genes_pSNP5gt40.csv")
 
-common_list = readRDS(paste0(dir, "/", "list_genes_CTRL-DON_commonEGFM.rds"))
-only_FM_list = readRDS(paste0(dir, "/", "list_genes_CTRL-DON_onlyFM.rds"))
-only_EG_list = readRDS(paste0(dir, "/", "list_genes_CTRL-DON_onlyEG.rds"))
+dir2 = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/"))
+common_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_commonEGFM.rds"))
+only_FM_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_onlyFM.rds"))
+only_EG_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_onlyEG.rds"))
 
 ```
 
@@ -126,8 +131,33 @@ genes_FM_list = genes_FM_list %>%
 
 
 
-# pValue distribution of FindMarkers 
+# pValue distribution of list of genes extracted with FindMarkers method (219 genes) 
 
+<br>
+
+With FindMarkers method, the pvalue is calculated with a Wilcoxon Rank Sum test and is adjusted with Bonferroni correction.  
+```{r}
+
+print("pval summary for FM list of genes")
+summary(genes_FM_list$p_val)
+print("pval adjusted summary for FM list of genes")
+summary(genes_FM_list$p_val_adj)
+
+```
+
+The pvalue is a probability so it's a number in the range 0 to 1.    
+To have a better scale on plots, we can change the scale and calculate the -log(p_val_adj).  
+```{r}
+
+genes_FM_list = genes_FM_list %>%
+  dplyr::mutate(minus_log_p_val_adj = -log(p_val_adj)) 
+
+print("-log(pval adjusted) summary for FM list of genes")
+summary(genes_FM_list$minus_log_p_val_adj)
+
+```
+
+We order the data in ascending order depending on p_val_adj value.  
 ```{r}
 
 # Reorder rows by ascending order of pvalue adjusted
@@ -137,20 +167,17 @@ genes_FM_list$gene = factor(genes_FM_list$gene , levels = genes_order)
 
 ```
 
+We plot the data with initial scale between 0 and 1.  
 ```{r, fig.height = 6, fig.width = 20}
 
-# Represent the data
+# Represent the data with pval scale
 ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
   geom_point() +
   scale_color_manual(values = color_code) +
   xlab(label = "Gene Name") +
   ylab(label = "pvalue adjusted") +
-  ggtitle(label = "Ordered pvalue distribution for FM list of genes") +
+  ggtitle(label = "Ordered pvalue adjusted distribution for FM list of genes") +
   theme(axis.text.x = element_text(angle = 90, size = 6))
-
-```
-
-```{r, fig.height = 6, fig.width = 20}
 
 # Zoom in
 ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
@@ -160,40 +187,46 @@ ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
   ylab(label = "pvalue adjusted") +
   coord_cartesian(ylim= c(0, 0.00025)) +
   scale_y_continuous(breaks=seq(0,0.00025, 0.00001)) +
-  ggtitle(label = "Ordered pvalue distribution for FM list of genes",
-          subtitle = "Zoom on values near 0") +
+  ggtitle(label = "Ordered pvalue adjusted distribution for FM list of genes",
+          subtitle = "Zoom on values near 0 - outliers max to 0.00025 were removed") +
   theme(axis.text.x = element_text(angle = 90, size = 6))
 
 ```
 
-```{r, fig.height = 10, fig.width = 20}
+As we can't see much, we try with the logarithm scale.   
+```{r, fig.height = 6, fig.width = 20}
 
-# Zoom in
-ggplot(data = genes_FM_list, aes(x=gene, y=p_val_adj, col=list_category)) +
+# Represent the data with -log scale
+ggplot(data = genes_FM_list, aes(x=gene, y=minus_log_p_val_adj, col=list_category)) +
   geom_point() +
   scale_color_manual(values = color_code) +
   xlab(label = "Gene Name") +
-  ylab(label = "pvalue adjusted") +
-  coord_cartesian(ylim= c(0, 0.000005)) +
-  scale_y_continuous(breaks=seq(0,0.000005, 0.0000001)) +
-  ggtitle(label = "Ordered pvalue distribution for FM list of genes",
-          subtitle = "Zoom on values near 0") +
+  ylab(label = "-log(pvalue adjusted)") +
+  ggtitle(label = "Ordered -log(pvalue adjusted) distribution for FM list of genes") +
   theme(axis.text.x = element_text(angle = 90, size = 6))
 
 ```
+
+<div class = "red">
+When we look at the list of genes extracted with FM method, it doesn't seems to have a clear delimitation in pvalue between the genes common with EG and the genes found only with FM.  
+</div>
+
+
 
 <br><br><br>
 
 
 
-# pSNP5 distribution of EpiGIFT
+# pValue distribution (pSNP5 method) of list of genes extracted with EpiGIFT method (174 genes)
 
 ```{r}
+
 pval5 <- as.data.frame(fread("/shared/ifbstor1/projects/strength_field_u/Epigenetics/CTRL_DON/BinFullData/pval5.csv"))
 
 genes_EG_list$pSNP5 <- pval5[pval5[,1] %in% genes_EG_list$GeneName,2] # logical vector that corresponds to the vector on the left
 genesFMpSNP5 <- pval5[pval5[,1] %in% genes_FM_list$gene,]
 genes_FM_list$pSNP5 <- genesFMpSNP5[match(genes_FM_list$gene, genesFMpSNP5[,1]),2]
+
 ```
 
 ```{r}
@@ -234,26 +267,35 @@ ggplot(data = genes_EG_list, aes(x=GeneName, y=pSNP5, col=list_category)) +
 
 ```
 
+<div class = "red">
+Add comments here.
+</div>
+
+
+
 <br><br><br>
 
 
 
-# pvalue distribution of FindMarkers against pvalue distribution of EpiGIFT
+# pvalue distribution of list of genes from FindMarkers and EpiGIFT
 
-**Step 1 : table with all the genes and FindMarkers pvalue**  
-FindMarkers() pvalue : the table genes_FM_list contains only_FM and common_EG_FM genes. We need to add only_EG genes in the table.  
-We manually calculated pvalue for those genes in scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes.Rmd.  
-We will join the table to have a complete one with all the genes of the three categories.  
-NB : for FM method, a good pvalue is really close to 0.  
+<br>
+
+**Step 1 : table with all the genes of both list (total = 316 genes) and the corresponding FindMarkers pvalue**    
+FindMarkers() pvalue : the table genes_FM_list contains only_FM and common_EG_FM genes. We need to add only_EG genes in the table.    
+We manually calculated pvalue for those genes in scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes.Rmd.        
+We will join the table to have a complete one with all the genes of the three categories.      
+NB : for FM method, a good pvalue is really close to 0.      
 ```{r}
 
 # Genes only EG
 dir = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/"))
 genes_EG_FMpval = readRDS(paste0(dir, "/", "EG_FindMarkerscalcul_CTRLDON.rds"))
-
 # Giota's direcrtory
-genes_EG_FMpval = readRDS("/shared/ifbstor1/projects/strength_field_u/Epigenetics/CTRL_DON/Git/exp/EG_FindMarkerscalcul_CTRLDON.rds")
+# genes_EG_FMpval = readRDS("/shared/ifbstor1/projects/strength_field_u/Epigenetics/CTRL_DON/Git/exp/EG_FindMarkerscalcul_CTRLDON.rds")
 
+print("pval adjusted summary for EG genes with FM method")
+summary(genes_EG_FMpval$p_val_adj)
 
 genes_EG_FMpval = genes_EG_FMpval %>% 
   dplyr::select(gene, p_val_adj) %>%
@@ -266,17 +308,18 @@ genes_FM = genes_FM_list %>% dplyr::select(gene, p_val_adj, list_category)
 # Join the table 
 tab_all_genes = full_join(x = genes_EG_FMpval %>% dplyr::filter(list_category != "common_FM_EG"), 
                           y = genes_FM, by = c("gene", "p_val_adj", "list_category"))
-tab_all_genes = tab_all_genes %>% dplyr::rename("pvalueFM" = "p_val_adj") 
+tab_all_genes = tab_all_genes %>% 
+  dplyr::rename("pvalueFM" = "p_val_adj") %>%
+  dplyr::mutate(minus_log_pvalueFM = log(pvalueFM))
 
 # Display the result
 tab_all_genes %>%
   kable() %>%
   kable_styling()
 
-
 # save intermediate table 
-
 saveRDS(tab_all_genes, paste0(directory_output, "tab_all_genes_pvalueFM.rds"))
+
 ```
 
 <br>
@@ -291,7 +334,6 @@ pval5 <- as.data.frame(fread("/shared/ifbstor1/projects/strength_field_u/Epigene
 genes_pSNP5 <- pval5[pval5[,1] %in% tab_all_genes$gene,]
 tab_all_genes$pSNP5 <- genes_pSNP5[match(tab_all_genes$gene, genes_pSNP5[,1]),2]
 
-
 # Display the result
 tab_all_genes %>%
   kable() %>%
@@ -299,31 +341,34 @@ tab_all_genes %>%
 
 
 # save intermediate table 
-
 saveRDS(tab_all_genes, "/shared/ifbstor1/projects/strength_field_u/Epigenetics/CTRL_DON/Git/exp/tab_all_genes_pvalues.rds")
+
 ```
 
 
 <br>
 
 **Step3 : Graphical representation with pSNP5 on y axis and pvalueFM on x axis**  
+=> To do : add some precision in the axis legend (pval or -log)  
+plot a graph with -log(pvalueFM)
 ```{r message=FALSE, warning=FALSE}
 
 # Create a table with name of the gene, list_category, pvalue in FM, pvalue in EG
 # gene list_category (common, onlyEG, onlyFM) pvalueEG pvalueFM
 # Draw one graph for each SNP : pvalueEG on y axis, pvalueFM on x axis and different colors for list_category
 
-ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pSNP5, fill=list_category, col = list_category)) +
+ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pSNP5, col = list_category)) +
   geom_point() +
   scale_fill_manual(values = color_code, limits = force)
 
 
 # Zoom in
-ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pSNP5, fill=list_category, col = list_category)) +
+ggplot(data = tab_all_genes, aes(x=pvalueFM, y=pSNP5, col = list_category)) +
   geom_point() +
   scale_fill_manual(values = color_code, limits = force) +
   xlim(0, 0.15) +
   ylim(0,230)
+
 ```
 
 
