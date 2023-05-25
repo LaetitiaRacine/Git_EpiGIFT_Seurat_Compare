@@ -1,0 +1,184 @@
+---
+title: "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_UMAPHistogram"
+author: "Laëtitia Racine"
+date: "2023-05-25"
+subtitle: "Last modification : `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: "hide"
+    toc: true
+    toc_float: false
+    theme: journal
+---
+
+<style>
+body {text-align: justify}  
+div.red {background-color:#FFA996; border-radius: 5px; padding: 8px;}
+</style>
+
+```{r, Setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+```
+
+```{r, Dependencies}
+
+library(dplyr)
+library(Seurat)
+library(stringr)
+library(ggplot2)
+library(kableExtra)
+
+```
+
+```{r, Working directory and external script}
+
+# Load working directories
+directory = str_extract(string = getwd(), pattern = "[:graph:]+(?=bin)")
+directory_data = paste0(directory, "data/")
+start_time = Sys.time()
+current_date = format(Sys.time(), "%Y%m%d")
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_UMAPHistogram/"))
+dir.create(path = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_UMAPHistogram/", 
+                         current_date))
+directory_output = paste0(directory, "exp/scRNAseq_EpiGIFT_Seurat_InvestigationCompare_UMAPHistogram/", 
+                          current_date, "/")
+
+# Load external script with functions and constants
+source(file = paste0(directory, "bin/", "Epi_FM_functions_constants.R"))
+
+# Define a color code for list category 
+color_code = c(
+  "common_FM_EG" = "#6922FB",
+  "only_EG" = "#F73131",
+  "only_FM" = "#2E9EFF"
+)
+
+```
+
+ 
+ 
+<br><br><br>
+
+
+
+# Overview 
+
+```{r, Load Input data}
+
+genes_EG_list = read.csv2(paste0(directory_data, "20230309_EpiGift_Variable174Genes_pSNP5gt40.csv"), sep =",")
+
+dir1 = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationGenesSeurat/"))
+genes_FM_list = readRDS(paste0(dir1, "/", "list_219_genes_FindMarkers_th0.15_wilcox_pval0.05.rds"))
+genes_FM_list = genes_FM_list[["wilcox"]]
+
+# Giota's direcrtory
+# genes_FM_list <- readRDS("/shared/ifbstor1/projects/strength_field_u/Epigenetics/FindMarkers_th0.15_pval0.05_genes.rds")
+# genes_EG_list <- read.csv("/shared/ifbstor1/projects/strength_field_u/Epigenetics/list_174genes_pSNP5gt40.csv")
+
+dir2 = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_InvestigationCompare_ListGenes/"))
+common_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_commonEGFM.rds"))
+only_FM_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_onlyFM.rds"))
+only_EG_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_onlyEG.rds"))
+
+list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
+
+```
+
+Reminder :  
+```{r}
+
+cat("CTRL versus DON : \n",
+    "FindMarkers - Seurat :",  nrow(genes_FM_list), "genes \n",
+    "EpiGIFT :", nrow(genes_EG_list), "genes \n",
+    "Common genes :", length(common_list), "\n",
+    "Only FindMarkers :", length(only_FM_list), "\n",
+    "Only EpiGift :", length(only_EG_list), "\n")
+
+# change color to correspond to color code 
+ggVennDiagram(x = list(FindMarkers= genes_FM_list$gene, 
+                       EpiGift= genes_EG_list$GeneName)) +
+  theme(legend.position = "none") 
+
+```
+
+
+<br><br><br>
+
+
+
+# UMAP with the different lists of genes 
+
+We subset the initial count matrix to keep only the genes of each list and we visualize the cells distribution on the UMAP based on those genes expression.   
+
+```{r, function definition}
+
+# subset the matrix depending on the list of genes 
+# PCA
+# UMAP
+
+```
+
+## UMAP based on FM list of genes (219 genes)
+
+## UMAP based on FM ONLY list of genes (142 genes)
+
+## UMAP based on EG list of genes (174 genes)
+
+## UMAP based on EG ONLY list of genes (97 genes)
+
+## UMAP based on FM and EG common list of genes (77 genes)
+
+
+<div class = "red">
+Comments 
+</div>
+
+
+<br><br><br>
+
+
+# Histogram of mRNA number => see QC graphs in classical analysis
+
+## mRNA number per gene per cell
+
+## mRNA number per gene per cell - cumulative sum 
+
+## mRNAnumber 
+
+
+<div class = "red">
+Comments
+</div>
+
+<br><br><br>
+
+
+# Conclusion 
+
+
+
+<br><br><br>
+
+****
+
+```{r, Rsession}
+
+end_time = Sys.time()
+cat("Total execution time : ", as.numeric (end_time - start_time, units = "mins"), "minutes")
+
+# Show package version
+sessionInfo()
+
+```
+
+```{r}
+
+# Clean working space and memory 
+rm(list = ls())
+gc()
+
+```
