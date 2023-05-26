@@ -31,6 +31,7 @@ library(Seurat)
 library(stringr)
 library(ggplot2)
 library(kableExtra)
+library(gridExtra)
 
 ```
 
@@ -54,7 +55,9 @@ source(file = paste0(directory, "bin/", "Epi_FM_functions_constants.R"))
 color_code = c(
   "common_FM_EG" = "#6922FB",
   "only_EG" = "#F73131",
-  "only_FM" = "#2E9EFF"
+  "only_FM" = "#2E9EFF",
+  "CTRL" = "#009E73",
+  "DON" = "#0072B2" 
 )
 
 ```
@@ -83,8 +86,7 @@ dir2 = pic_last_dir(paste0(directory, "exp/", "scRNAseq_EpiGIFT_Seurat_Investiga
 common_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_commonEGFM.rds"))
 only_FM_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_onlyFM.rds"))
 only_EG_list = readRDS(paste0(dir2, "/", "list_genes_CTRL-DON_onlyEG.rds"))
-
-list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
+list_seurat_obj_sct = readRDS(paste0(dir2, "/", "list_seurat_obj_epi_sct.rds"))
 
 ```
 
@@ -112,29 +114,242 @@ ggVennDiagram(x = list(FindMarkers= genes_FM_list$gene,
 
 # UMAP with the different lists of genes 
 
-We subset the initial count matrix to keep only the genes of each list and we visualize the cells distribution on the UMAP based on those genes expression.   
+We work from the list of seurat object, normalized with SCT transformation and variable.features.rv.th = 1.3.  
+As a first step, we select the two lists that correspond to CTRL and DON and we merge the Grange objects. 
+Then, we add the variable feature list in the new object.  
+```{r}
 
-```{r, function definition}
+# Select drugs and merge 
+merge_obj = merge(x = list_seurat_obj_sct[["CTRL"]], 
+                  y = list_seurat_obj_sct[["DON"]],
+                  add.cell.ids = c("CTRL", "DON"),
+                  merge.data = TRUE)
 
-# subset the matrix depending on the list of genes 
-# PCA
-# UMAP
+# Variable features
+VariableFeatures(merge_obj) = rownames(merge_obj[["SCT"]]@scale.data)
+
+# Set Identity to the condition name
+merge_obj = SetIdent(object = merge_obj, value = "orig.ident")
+
+```
+  
+We want to visualize the cell's distribution (cell's separation between drugs) on UMAP depending the list of genes we used to draw it.    
+We subset the initial count matrix to keep only the genes of the studied list and we calculate the PCA and the UMAP based on those genes' expression.  
+https://github.com/satijalab/seurat/issues/1963  
+```{r, functions definition}
+
+umap_highlight = function(seurat_obj, color_code) {
+
+  ind_umap = list()
+
+  for (i in 1:length(unique(seurat_obj$orig.ident))) {
+
+  # Select condition to highlight
+  highlight_cond = unique(seurat_obj$orig.ident)[i]
+  color = unname(noquote(color_code[highlight_cond]))
+  others_cond = setdiff(unique(seurat_obj$orig.ident), highlight_cond)
+  others_cond_group = paste(others_cond, collapse=", ")
+
+  # Sort cell according to their condition
+  cell_highlight = unlist(CellsByIdentities(object = seurat_obj, idents = highlight_cond))
+  cell_nohighlight = unlist(CellsByIdentities(object = seurat_obj, idents = others_cond))
+
+  # Plot
+  plot_umap = DimPlot(object = seurat_obj,
+                      group.by = "orig.ident",
+                      reduction ="umap",
+                      pt.size = 0.05,
+                      cells.highlight = list(cell_highlight, cell_nohighlight),
+                      cols.highlight = c(color,"grey")) +
+    ggtitle(highlight_cond) +
+    theme(legend.position = "none")
+
+  ind_umap[[i]] = plot_umap
+
+  }
+
+  # function's output
+  return(ind_umap)
+
+ }
+ 
+
+umap_genespecific = function(merge_obj, list_genes, color_code) {
+  
+  # subset the matrix depending on the list of genes 
+  merge_sub = subset(merge_obj, features = list_genes)
+  cat("Matrix count has now", nrow(merge_sub), "genes.")
+  
+  # PCA 
+  merge_sub = RunPCA(object = merge_sub, 
+                     assay = "SCT", 
+                     npcs = 100,
+                     reduction.name = "pca", 
+                     seed.use = 42, 
+                     verbose = FALSE,
+                     approx = FALSE)
+  # UMAP
+  merge_sub = RunUMAP(object = merge_sub, 
+                      assay = "SCT", 
+                      dims = c(1:40), 
+                      reduction =  "pca", 
+                      reduction.name = "umap", 
+                      verbose = FALSE)
+  
+  # plot_UMAP
+  plot_merged = DimPlot(merge_sub,
+                        reduction = "umap",
+                        group.by = "orig.ident") +
+    scale_color_manual(values = color_code, limits = force)
+  
+  plot_separated = umap_highlight(merge_sub, 
+                                  color_code)
+  plot_separated = do.call("grid.arrange", 
+                           c(plot_separated, ncol = 2))
+  
+  # output of the function
+  results = list(merge_sub = merge_sub,
+                 plot_merged_UMAP = plot_merged,
+                 plot_sep_UMAP = plot_separated)
+  return(results)
+
+}
 
 ```
 
+
+<br>
+
+## UMAP based on all the genes of the study (22084 genes)
+
+```{r, fig.show="hide"}
+
+all_genes_UMAP = umap_genespecific(merge_obj, rownames(merge_obj), color_code)
+
+```
+
+```{r, fig.width=8, fig.height=10}
+
+all_genes_UMAP$plot_merged_UMAP / all_genes_UMAP$plot_sep_UMAP
+
+```
+
+<br>
+
 ## UMAP based on FM list of genes (219 genes)
+
+```{r, fig.show="hide"}
+
+FM_genes_UMAP = umap_genespecific(merge_obj, genes_FM_list$gene, color_code)
+
+```
+
+```{r, fig.width=8, fig.height=10}
+
+FM_genes_UMAP$plot_merged_UMAP / FM_genes_UMAP$plot_sep_UMAP
+
+```
+
+<br>
 
 ## UMAP based on FM ONLY list of genes (142 genes)
 
+```{r, fig.show="hide"}
+
+FM_only_genes_UMAP = umap_genespecific(merge_obj, only_FM_list, color_code)
+
+```
+
+```{r, fig.width=8, fig.height=10}
+
+FM_only_genes_UMAP$plot_merged_UMAP / FM_only_genes_UMAP$plot_sep_UMAP
+
+```
+
+```{r, fig.width = 24, fig.height = 60}
+
+FeaturePlot(object = FM_only_genes_UMAP$merge_sub, features = only_FM_list, ncol = 6)
+
+```
+
+<br>
+
 ## UMAP based on EG list of genes (174 genes)
+
+```{r, fig.show="hide"}
+
+EG_genes_UMAP = umap_genespecific(merge_obj, genes_EG_list$GeneName, color_code)
+
+```
+
+```{r, fig.width=8, fig.height=10}
+
+EG_genes_UMAP$plot_merged_UMAP / EG_genes_UMAP$plot_sep_UMAP
+
+```
+
+<br>
 
 ## UMAP based on EG ONLY list of genes (97 genes)
 
+```{r, fig.show="hide"}
+
+EG_only_genes_UMAP = umap_genespecific(merge_obj, only_EG_list, color_code)
+
+```
+
+```{r, fig.width=8, fig.height=10}
+
+EG_only_genes_UMAP$plot_merged_UMAP / EG_only_genes_UMAP$plot_sep_UMAP
+
+```
+
+```{r, fig.width = 24, fig.height = 50}
+
+FeaturePlot(object = EG_only_genes_UMAP$merge_sub, features = only_EG_list, ncol = 6)
+
+```
+
+<br>
+
 ## UMAP based on FM and EG common list of genes (77 genes)
+
+```{r, fig.show="hide"}
+
+FM_EG_com_genes_UMAP = umap_genespecific(merge_obj, common_list, color_code)
+
+```
+
+```{r, fig.width=8, fig.height=10}
+
+FM_EG_com_genes_UMAP$plot_merged_UMAP / FM_EG_com_genes_UMAP$plot_sep_UMAP
+
+```
+
+```{r, fig.width = 24, fig.height = 30}
+
+FeaturePlot(object = FM_EG_com_genes_UMAP$merge_sub, features = common_list, ncol = 6)
+
+```
+
+<br>
+
+## Comparison of all 
+
+```{r, fig.width = 12, fig.height = 12}
+
+(all_genes_UMAP$plot_merged_UMAP | 
+   FM_genes_UMAP$plot_merged_UMAP | 
+   FM_only_genes_UMAP$plot_merged_UMAP) / 
+  (EG_genes_UMAP$plot_merged_UMAP | 
+     EG_only_genes_UMAP$plot_merged_UMAP | 
+     FM_EG_com_genes_UMAP$plot_merged_UMAP)
+
+```
 
 
 <div class = "red">
-Comments 
+No visible differences on the UMAP whan we change the list of genes used to plot it. 
 </div>
 
 
