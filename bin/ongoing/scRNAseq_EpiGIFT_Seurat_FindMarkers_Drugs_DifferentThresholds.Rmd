@@ -1,0 +1,135 @@
+---
+title: "scRNAseq_EpiGIFT_Seurat_FindMarkers_Drugs_DifferentThresholds"
+author: "Laëtitia Racine"
+date: "2023-09-05"
+output: html_document
+---
+
+**Libraries**
+```{r}
+
+library(sctransform)
+library(Seurat)
+
+```
+
+**Load object**
+```{r}
+
+directory_data = "/home/rparmentier/Bureau/Git_EPIGIFT_Seurat_Compare/data/"
+list_seurat_obj = readRDS(paste0(directory_data, "list_seurat_obj_epi.rds"))
+
+```
+
+**Function to normalize and merge object**
+```{r}
+ 
+prepare_obj = function(list_seurat, drug_choice){
+  
+  list_seurat = list_seurat[drug_choice]
+  
+  # Apply SCT normalization on individual objects
+  list_obj = lapply(list_seurat, function(x) { 
+    SCTransform(object = x, 
+                assay = "RNA", 
+                new.assay.name = "SCT",
+                do.center = TRUE, 
+                do.scale = FALSE,
+                variable.features.n = NULL,
+                variable.features.rv.th = 1.3,
+                residual.features = NULL,
+                vars.to.regress = NULL,
+                min_cells = 1,
+                ncells = NULL,
+                verbose = FALSE,
+                # vst additional parameter
+                method = "glmGamPoi",
+                residual_type = "deviance",
+                n_genes = NULL)
+  })
+
+  # Merge conditions
+  merge_obj = merge(x = list_obj[[drug_choice[1]]], 
+                    y = list_obj[[drug_choice[2]]],
+                    add.cell.ids = drug_choice,
+                    merge.data = TRUE)
+  
+  # Variable features
+  VariableFeatures(merge_obj) = rownames(merge_obj[["SCT"]]@scale.data)
+  
+  # Linear reduction and clustering
+  merge_obj = RunPCA(object = merge_obj, 
+                     assay = "SCT", 
+                     npcs = 100,
+                     reduction.name = "pca", 
+                     seed.use = 42, 
+                     verbose = FALSE)
+  merge_obj = RunUMAP(object = merge_obj, 
+                      assay = "SCT", 
+                      dims = c(1:40), 
+                      set.seed = 42,
+                      reduction =  "pca", 
+                      reduction.name = "umap", 
+                      verbose = FALSE)
+  merge_obj = FindNeighbors(object = merge_obj, assay = "SCT", dims = c(1:40))
+  merge_obj = FindClusters(object = merge_obj, resolution = 0.6, algorithm = 3)
+  
+  # Prepare the object for FindMarkers
+  Idents(merge_obj) <- "orig.ident"
+  merge_obj <- PrepSCTFindMarkers(merge_obj)
+
+}
+
+```
+
+**Call function**
+```{r}
+
+drugs_choice = c("CTRL2", "AOA")
+drug1 = "CTRL2"
+drug2 = "AOA"
+merge_obj = prepare_obj(list_seurat_obj, drugs_choice)
+
+```
+
+**Find markers with different thresholds**
+```{r}
+
+list_FM_gene_thresholds = list()
+list_FM_thresholds = list()
+threshold = c("0.05", "0.1", "0.15", "0.2", "0.25", 
+               "0.3", "0.35", "0.4", "0.45", "0.5")
+
+for (i in 1:length(threshold)) {
+  
+  genes = FindMarkers(object = merge_obj, 
+                      assay = "SCT", 
+                      ident.1 = drug1, 
+                      ident.2 = drug2, 
+                      logfc.threshold = threshold[i],
+                      slot = "data",
+                      group.by = NULL,
+                      subset.ident = NULL,
+                      features = NULL,
+                      test.use = "wilcox",
+                      pseudocount.use = 1,
+                      verbose = FALSE) %>% 
+  tibble::rownames_to_column("gene") %>%
+  dplyr::filter(p_val_adj <= 0.05)
+  
+  list_FM_gene_thresholds[threshold[i]] = list(genes$gene)
+  list_FM_thresholds[threshold[i]] = genes
+
+}
+
+```
+
+**Save objects**
+```{r}
+
+saveRDS(list_FM_gene_thresholds, 
+        file = paste0(directory_output, "CTRL_AOA_list_genes_FM_different_thresholds.rds"))
+saveRDS(list_FM_thresholds, 
+        file = paste0(directory_output, "CTRL_AOA_list_FM_different_thresholds.rds"))
+
+```
